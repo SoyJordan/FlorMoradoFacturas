@@ -1,0 +1,12 @@
+{
+  "name":"Flor Morado Muebles",
+  "short_name":"Flor Morado",
+  "start_url":"./",
+  "display":"standalone",
+  "background_color":"#0d0b19",
+  "theme_color":"#25113f",
+  "icons":[
+    {"src":"icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}
