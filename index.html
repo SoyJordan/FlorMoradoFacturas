@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#6f2c91" />
+  <title>Flor Morado Muebles</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div>
+    <div class="brand">FM</div>
+    <div><h1>Flor Morado Muebles</h1><p>Ventas · Inventario · Cartera</p></div>
+  </div>
+  <button id="backupBtn" class="ghost">Backup</button>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-view="home" class="active">Inicio</button>
+  <button data-view="sale">Nueva venta</button>
+  <button data-view="clients">Clientes</button>
+  <button data-view="inventory">Inventario</button>
+  <button data-view="receivables">Cartera</button>
+  <button data-view="history">Historial</button>
+</nav>
+
+<main>
+  <section id="home" class="view active">
+    <div class="grid stats">
+      <article><span>Ventas del mes</span><strong id="statSales">$0</strong></article>
+      <article><span>Utilidad estimada</span><strong id="statProfit">$0</strong></article>
+      <article><span>Cartera pendiente</span><strong id="statDebt">$0</strong></article>
+      <article><span>Productos con stock bajo</span><strong id="statLow">0</strong></article>
+    </div>
+    <div class="card">
+      <h2>Accesos rápidos</h2>
+      <div class="actions">
+        <button data-go="sale">Crear comprobante</button>
+        <button data-go="inventory" class="secondary">Agregar producto</button>
+        <button data-go="clients" class="secondary">Agregar cliente</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="sale" class="view">
+    <div class="card">
+      <h2>Nueva venta</h2>
+      <div class="form-grid">
+        <label>Cliente<select id="saleClient"></select></label>
+        <label>Fecha<input id="saleDate" type="date" /></label>
+        <label>Transporte<input id="saleShipping" type="number" min="0" step="1000" value="0" /></label>
+        <label>Descuento<input id="saleDiscount" type="number" min="0" step="1000" value="0" /></label>
+        <label>Abono inicial<input id="saleDeposit" type="number" min="0" step="1000" value="0" /></label>
+        <label>Método de pago<select id="salePayment"><option>Efectivo</option><option>Transferencia</option><option>Nequi</option><option>Daviplata</option><option>Otro</option></select></label>
+      </div>
+      <h3>Productos</h3>
+      <div id="saleItems"></div>
+      <button id="addSaleItem" class="secondary">+ Agregar producto</button>
+      <div class="totals">
+        <div><span>Subtotal</span><strong id="saleSubtotal">$0</strong></div>
+        <div><span>Total</span><strong id="saleTotal">$0</strong></div>
+        <div><span>Saldo</span><strong id="saleBalance">$0</strong></div>
+      </div>
+      <label>Observaciones<textarea id="saleNotes" rows="3" placeholder="Color, medidas, entrega, garantía, etc."></textarea></label>
+      <button id="saveSale">Guardar venta y generar comprobante</button>
+    </div>
+  </section>
+
+  <section id="clients" class="view">
+    <div class="card">
+      <h2>Clientes</h2>
+      <div class="form-grid">
+        <label>Nombre<input id="clientName" /></label>
+        <label>Teléfono<input id="clientPhone" inputmode="tel" /></label>
+        <label>Dirección<input id="clientAddress" /></label>
+        <label>Notas<input id="clientNotes" /></label>
+      </div>
+      <button id="addClient">Guardar cliente</button>
+    </div>
+    <div class="card"><div id="clientList" class="list"></div></div>
+  </section>
+
+  <section id="inventory" class="view">
+    <div class="card">
+      <h2>Inventario</h2>
+      <div class="form-grid">
+        <label>Producto<input id="prodName" /></label>
+        <label>Referencia<input id="prodRef" /></label>
+        <label>Categoría<input id="prodCategory" placeholder="Sala, comedor, mesa..." /></label>
+        <label>Costo<input id="prodCost" type="number" min="0" step="1000" /></label>
+        <label>Precio de venta<input id="prodPrice" type="number" min="0" step="1000" /></label>
+        <label>Stock<input id="prodStock" type="number" min="0" step="1" /></label>
+      </div>
+      <button id="addProduct">Guardar producto</button>
+    </div>
+    <div class="card"><div id="productList" class="list"></div></div>
+  </section>
+
+  <section id="receivables" class="view">
+    <div class="card">
+      <h2>Cuentas por cobrar</h2>
+      <div id="receivableList" class="list"></div>
+    </div>
+  </section>
+
+  <section id="history" class="view">
+    <div class="card">
+      <h2>Historial de ventas</h2>
+      <input id="historySearch" placeholder="Buscar por cliente o comprobante" />
+      <div id="historyList" class="list"></div>
+    </div>
+  </section>
+</main>
+
+<div id="modal" class="modal hidden">
+  <div class="modal-card">
+    <button id="closeModal" class="close">×</button>
+    <div id="receipt"></div>
+    <div class="actions no-print">
+      <button id="printReceipt">Imprimir / Guardar PDF</button>
+      <button id="closeModal2" class="secondary">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="importFile" accept="application/json" hidden />
+<script src="app.js"></script>
+</body>
+</html>
