@@ -99,6 +99,45 @@ let currentReceiptSaleId=null;
 function show(v){$$('.view').forEach(x=>x.classList.toggle('active',x.id===v));$$('.tabs button').forEach(x=>x.classList.toggle('active',x.dataset.view===v));window.scrollTo({top:0,behavior:'smooth'});} 
 $$('.tabs button').forEach(b=>b.onclick=()=>show(b.dataset.view));$$('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));
 
+// ===== Atajo iOS · Registro rápido de Finanzas =====
+let quickFinanceMode=false;
+const FIN_TX_OPTIONS_FULL='<option value="expense">Gasto</option><option value="income">Ingreso</option><option value="transfer">Transferencia</option><option value="charge">Cargo a tarjeta/deuda</option><option value="payment">Abono a tarjeta/deuda</option>';
+const FIN_TX_OPTIONS_QUICK='<option value="expense">Gasto</option><option value="income">Ingreso</option>';
+function appBaseUrl(){return location.href.split('#')[0].split('?')[0];}
+function quickFinanceUrl(){return appBaseUrl()+'?quick=finance';}
+function setQuickFinanceUi(active){
+  quickFinanceMode=active;
+  $('#finMovementTitle').textContent=active?'Registro rápido · Finanzas':'Nuevo movimiento financiero';
+  $('#finMovementQuickNote').classList.toggle('hidden',!active);
+  const current=$('#finTxType').value;
+  $('#finTxType').innerHTML=active?FIN_TX_OPTIONS_QUICK:FIN_TX_OPTIONS_FULL;
+  $('#finTxType').value=(active&&(current==='income'||current==='expense'))?current:'expense';
+}
+function clearQuickFinanceQuery(){
+  if(location.search){history.replaceState({},'',appBaseUrl()+location.hash);}
+}
+function openQuickFinance(prefill={}){
+  if(!db.finance.accounts.length){show('finance');alert('Para usar el Atajo de Finanzas, primero crea al menos una cuenta en Finanzas.');return;}
+  show('finance');
+  setQuickFinanceUi(true);
+  $('#finTxDate').value=prefill.date||today();
+  $('#finTxAmount').value=prefill.amount||'';
+  $('#finTxNote').value=prefill.note||'';
+  $('#finTxCategory').value=prefill.category||'';
+  $('#finTxType').value=prefill.type==='income'?'income':'expense';
+  finTxUi();
+  const accountId=prefill.account||'';
+  if(accountId){if($('#finTxType').value==='income')$('#finTxTo').value=accountId;else $('#finTxFrom').value=accountId;}
+  $('#finMovementModal').classList.remove('hidden');
+  setTimeout(()=>$('#finTxAmount').focus(),80);
+}
+function handleQuickFinanceFromUrl(){
+  const q=new URLSearchParams(location.search);
+  if(q.get('quick')!=='finance')return;
+  openQuickFinance({type:q.get('type'),amount:q.get('amount'),category:q.get('category'),note:q.get('note'),account:q.get('account'),date:q.get('date')});
+}
+
+
 function clientSales(clientId){return db.sales.filter(s=>s.clientId===clientId&&s.orderStatus!=='Cancelada');}
 function renderClients(){
  $('#saleClient').innerHTML='<option value="">Seleccionar cliente</option>'+db.clients.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
@@ -279,12 +318,26 @@ function finRenderMovements(){
 $('#finMovementFilter').onchange=finRenderMovements;
 function finTxUi(){const t=$('#finTxType').value;$('#finTxFromWrap').classList.toggle('hidden',t==='income'||t==='charge');$('#finTxToWrap').classList.toggle('hidden',t==='expense');$('#finTxCategoryWrap').classList.toggle('hidden',t==='transfer'||t==='payment');if(t==='income'){$('#finTxTo').innerHTML='<option value="">Cuenta que recibe</option>'+finEscAccountOptions(false)}else if(t==='expense'){$('#finTxFrom').innerHTML='<option value="">Cuenta que paga</option>'+finEscAccountOptions(false)}else if(t==='charge'){$('#finTxTo').innerHTML='<option value="">Tarjeta / deuda</option>'+db.finance.accounts.filter(finIsLiability).map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('')}else if(t==='payment'){$('#finTxFrom').innerHTML='<option value="">Sin cuenta / abono histórico</option>'+finEscAccountOptions(false);$('#finTxTo').innerHTML='<option value="">Tarjeta / deuda</option>'+db.finance.accounts.filter(finIsLiability).map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('')}else{finRenderSelectors();}}
 
-function finOpenTx(){if(!db.finance.accounts.length)return alert('Primero crea al menos una cuenta.');$('#finTxDate').value=today();$('#finTxAmount').value='';$('#finTxNote').value='';$('#finTxCategory').value='';$('#finTxType').value='expense';finTxUi();$('#finMovementModal').classList.remove('hidden');}
+function finOpenTx(){if(!db.finance.accounts.length)return alert('Primero crea al menos una cuenta.');setQuickFinanceUi(false);$('#finTxDate').value=today();$('#finTxAmount').value='';$('#finTxNote').value='';$('#finTxCategory').value='';$('#finTxType').value='expense';finTxUi();$('#finMovementModal').classList.remove('hidden');}
 window.openFinPayment=x=>{const a=finAccount(x);if(!a||!finIsLiability(a))return;$('#finTxDate').value=today();$('#finTxAmount').value='';$('#finTxNote').value='Abono a '+a.name;$('#finTxCategory').value='Deudas';$('#finTxType').value='payment';finTxUi();$('#finTxTo').value=a.id;$('#finMovementModal').classList.remove('hidden');};
 window.openFinCollection=x=>{const a=finAccount(x);if(!a||a.type!=='receivable')return;const destinations=db.finance.accounts.filter(z=>FIN_LIQUID_TYPES.includes(z.type));if(!destinations.length)return alert('Crea primero una cuenta de Efectivo, Ahorros, Corriente o Billetera para recibir el cobro.');const pending=finBalance(a);const raw=prompt(`Saldo por cobrar ${money(pending)}.\nValor recibido:`);if(raw===null)return;const amount=Number(String(raw).replace(/[^0-9.-]/g,''));if(!amount||amount<=0)return alert('Ingresa un valor válido.');if(amount>pending&&!confirm(`El cobro supera el saldo pendiente (${money(pending)}). ¿Continuar?`))return;let dest=destinations[0];if(destinations.length>1){const menu=destinations.map((z,i)=>`${i+1}. ${z.name}`).join('\n');const n=Number(prompt(`¿Dónde recibiste el dinero?\n\n${menu}`, '1'));if(!destinations[n-1])return;dest=destinations[n-1];}db.finance.transactions.push({id:id(),date:today(),time:colombiaTime(),createdAt:nowStamp(),type:'transfer',fromId:a.id,toId:dest.id,category:'Cobro cartera',amount,note:'Cobro de '+a.name});save();};
 window.openFinAssetConvert=x=>{const a=finAccount(x);if(!a||a.type!=='asset')return;const destinations=db.finance.accounts.filter(z=>FIN_LIQUID_TYPES.includes(z.type));if(!destinations.length)return alert('Crea primero una cuenta de Efectivo, Ahorros, Corriente o Billetera para recibir el valor.');const available=finBalance(a);const raw=prompt(`Valor registrado del activo ${money(available)}.\nValor a convertir/recuperar:`);if(raw===null)return;const amount=Number(String(raw).replace(/[^0-9.-]/g,''));if(!amount||amount<=0)return alert('Ingresa un valor válido.');if(amount>available&&!confirm(`El valor supera el saldo del activo (${money(available)}). ¿Continuar?`))return;let dest=destinations[0];if(destinations.length>1){const menu=destinations.map((z,i)=>`${i+1}. ${z.name}`).join('\n');const n=Number(prompt(`¿A qué cuenta entra el dinero?\n\n${menu}`, '1'));if(!destinations[n-1])return;dest=destinations[n-1];}db.finance.transactions.push({id:id(),date:today(),time:colombiaTime(),createdAt:nowStamp(),type:'transfer',fromId:a.id,toId:dest.id,category:'Conversión de activo',amount,note:'Conversión de '+a.name});save();};
-$('#newFinMovement').onclick=finOpenTx;$('#closeFinMovement').onclick=$('#cancelFinTx').onclick=()=>$('#finMovementModal').classList.add('hidden');$('#finTxType').onchange=finTxUi;
-$('#saveFinTx').onclick=()=>{const type=$('#finTxType').value,amount=Number($('#finTxAmount').value||0),fromId=$('#finTxFrom').value,toId=$('#finTxTo').value;if(amount<=0)return alert('Ingresa un valor válido.');if((type==='expense'||type==='transfer')&&!fromId)return alert('Selecciona la cuenta de origen.');if((type==='income'||type==='transfer'||type==='charge'||type==='payment')&&!toId)return alert('Selecciona la cuenta destino.');if(type==='transfer'&&fromId===toId)return alert('Origen y destino deben ser diferentes.');if(type==='payment'){const a=finAccount(toId);const pending=a?finBalance(a):0;if(amount>pending&&!confirm(`El abono supera el saldo pendiente (${money(pending)}). ¿Registrarlo igualmente?`))return;}db.finance.transactions.push({id:id(),date:$('#finTxDate').value||today(),time:colombiaTime(),createdAt:nowStamp(),type,fromId,toId,category:$('#finTxCategory').value.trim()||((type==='charge'||type==='payment')?'Deudas':'Otros'),amount,note:$('#finTxNote').value.trim()});$('#finMovementModal').classList.add('hidden');save();};
+$('#newFinMovement').onclick=finOpenTx;
+function closeFinMovementModal(){ $('#finMovementModal').classList.add('hidden'); if(quickFinanceMode){setQuickFinanceUi(false);clearQuickFinanceQuery();} }
+$('#closeFinMovement').onclick=$('#cancelFinTx').onclick=closeFinMovementModal;$('#finTxType').onchange=finTxUi;
+
+$('#iosShortcutBtn').onclick=()=>{
+  $('#iosShortcutUrl').value=quickFinanceUrl();
+  $('#iosShortcutModal').classList.remove('hidden');
+};
+$('#closeIosShortcut').onclick=()=>$('#iosShortcutModal').classList.add('hidden');
+$('#copyIosShortcutUrl').onclick=async()=>{
+  const url=quickFinanceUrl(); $('#iosShortcutUrl').value=url;
+  try{await navigator.clipboard.writeText(url);$('#copyIosShortcutUrl').textContent='✓ Enlace copiado';setTimeout(()=>$('#copyIosShortcutUrl').textContent='Copiar enlace',1800);}catch{prompt('Copia este enlace:',url);}
+};
+$('#openShortcutsApp').onclick=()=>{location.href='shortcuts://';};
+$('#testIosShortcut').onclick=()=>{$('#iosShortcutModal').classList.add('hidden');openQuickFinance();};
+$('#saveFinTx').onclick=()=>{const type=$('#finTxType').value,amount=Number($('#finTxAmount').value||0),fromId=$('#finTxFrom').value,toId=$('#finTxTo').value;if(amount<=0)return alert('Ingresa un valor válido.');if((type==='expense'||type==='transfer')&&!fromId)return alert('Selecciona la cuenta de origen.');if((type==='income'||type==='transfer'||type==='charge'||type==='payment')&&!toId)return alert('Selecciona la cuenta destino.');if(type==='transfer'&&fromId===toId)return alert('Origen y destino deben ser diferentes.');if(type==='payment'){const a=finAccount(toId);const pending=a?finBalance(a):0;if(amount>pending&&!confirm(`El abono supera el saldo pendiente (${money(pending)}). ¿Registrarlo igualmente?`))return;}db.finance.transactions.push({id:id(),date:$('#finTxDate').value||today(),time:colombiaTime(),createdAt:nowStamp(),type,fromId,toId,category:$('#finTxCategory').value.trim()||((type==='charge'||type==='payment')?'Deudas':'Otros'),amount,note:$('#finTxNote').value.trim()});$('#finMovementModal').classList.add('hidden');const wasQuick=quickFinanceMode;if(wasQuick){setQuickFinanceUi(false);clearQuickFinanceQuery();}save();if(wasQuick)setTimeout(()=>alert((type==='income'?'Ingreso':'Gasto')+' registrado correctamente.'),50);};
 window.deleteFinTx=x=>{if(confirm('¿Eliminar este movimiento financiero?')){db.finance.transactions=db.finance.transactions.filter(t=>t.id!==x);save();}};
 
 function renderAll(){renderClients();renderProducts();renderReceivables();renderHistory();renderCash();renderStats();renderSettings();renderFinance();}
@@ -294,7 +347,7 @@ function backupStamp(){
  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
 }
 function backupFileName(){return `FlorMorado_Backup_${backupStamp()}.json`;}
-function backupPayload(){return JSON.stringify({...db,_backup:{app:'Flor Morado Muebles',version:'1.4.4',createdAt:new Date().toISOString()}},null,2);}
+function backupPayload(){return JSON.stringify({...db,_backup:{app:'Flor Morado Muebles',version:'1.4.5',createdAt:new Date().toISOString()}},null,2);}
 function updateBackupUi(){
  const el=$('#lastBackupText'),warn=$('#backupWarning'); if(!el||!warn)return;
  const raw=db.settings.lastBackupAt;
@@ -341,5 +394,5 @@ $('#createBackup').onclick=createBackup;
 $('#restoreBackup').onclick=()=>$('#importFile').click();
 $('#importFile').onchange=e=>{const f=e.target.files[0];if(f)restoreBackupFile(f);};
 
-$('#saleDate').value=today();$('#cashDate').value=today();renderAll();updateBackupUi();addSaleItem();calcSale();
+$('#saleDate').value=today();$('#cashDate').value=today();renderAll();updateBackupUi();addSaleItem();calcSale();handleQuickFinanceFromUrl();
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=1.4.4',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
