@@ -9,13 +9,13 @@
   <title>Flor Morado Muebles</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="assets/icon-192.png" />
-  <link rel="stylesheet" href="css/styles.css?v=1.4.4" />
+  <link rel="stylesheet" href="css/styles.css?v=1.4.5" />
 </head>
 <body>
 <header class="topbar">
   <div class="brand-wrap">
     <img src="assets/logo-flor-morado.jpg" class="brand-logo" alt="Flor Morado Muebles" />
-    <div><h1>Flor Morado Muebles</h1><p>Ventas · Pedidos · Inventario · Finanzas · V1.4.4</p></div>
+    <div><h1>Flor Morado Muebles</h1><p>Ventas · Pedidos · Inventario · Finanzas · V1.4.5</p></div>
   </div>
   <button id="backupBtn" class="ghost">Backup iCloud</button>
 </header>
@@ -182,7 +182,7 @@
   <section id="finance" class="view">
     <div class="finance-hero">
       <div><span class="eyebrow">FINANZAS PERSONALES / NEGOCIO</span><h2>Centro financiero</h2><p>Controla cuentas, efectivo, ahorros, tarjetas, deudas, ingresos, gastos y pagos recurrentes sin mezclarlo con la facturación.</p></div>
-      <button id="newFinMovement">+ Movimiento</button>
+      <div class="finance-hero-actions"><button id="iosShortcutBtn" class="secondary">⚡ Atajo iOS</button><button id="newFinMovement">+ Movimiento</button></div>
     </div>
 
     <div class="grid stats stats-wide finance-stats">
@@ -304,7 +304,8 @@
 <div id="finMovementModal" class="modal hidden">
   <div class="modal-card compact-modal">
     <button id="closeFinMovement" class="close">×</button>
-    <h2>Nuevo movimiento financiero</h2>
+    <h2 id="finMovementTitle">Nuevo movimiento financiero</h2>
+    <p id="finMovementQuickNote" class="muted small hidden">Registro rápido desde el Atajo de iOS. Confirma los datos y guarda.</p>
     <div class="form-grid">
       <label>Fecha<input id="finTxDate" type="date"></label>
       <label>Tipo<select id="finTxType"><option value="expense">Gasto</option><option value="income">Ingreso</option><option value="transfer">Transferencia</option><option value="charge">Cargo a tarjeta/deuda</option><option value="payment">Abono a tarjeta/deuda</option></select></label>
@@ -317,11 +318,41 @@
     <div class="actions"><button id="saveFinTx">Guardar movimiento</button><button id="cancelFinTx" class="secondary">Cancelar</button></div>
   </div>
 </div>
+<div id="iosShortcutModal" class="modal hidden">
+  <div class="modal-card compact-modal">
+    <button id="closeIosShortcut" class="close">×</button>
+    <span class="eyebrow">INTEGRACIÓN CON iPHONE</span>
+    <h2>Atajo “Movimiento Flor Morado”</h2>
+    <p class="muted">Crea un único Atajo de iOS que abre directamente el registro rápido de <strong>Ingreso o Gasto</strong> en Finanzas.</p>
+    <div class="shortcut-preview">
+      <div><span>1</span><strong>Toca el Atajo</strong><small>Desde Inicio, widget o Siri</small></div>
+      <div><span>2</span><strong>Elige Ingreso o Gasto</strong><small>Completa valor, cuenta y concepto</small></div>
+      <div><span>3</span><strong>Guardar</strong><small>Queda en Finanzas con hora Colombia</small></div>
+    </div>
+    <label>Enlace del registro rápido<input id="iosShortcutUrl" readonly></label>
+    <div class="actions">
+      <button id="copyIosShortcutUrl">Copiar enlace</button>
+      <button id="openShortcutsApp" class="secondary">Abrir Atajos</button>
+    </div>
+    <div class="shortcut-steps">
+      <h3>Configuración en iOS</h3>
+      <ol>
+        <li>Abre <strong>Atajos</strong> y crea un atajo nuevo.</li>
+        <li>Añade la acción <strong>Abrir URL</strong>.</li>
+        <li>Pega el enlace copiado arriba.</li>
+        <li>Nómbralo <strong>Movimiento Flor Morado</strong>.</li>
+        <li>Opcional: añádelo a Inicio, a un widget o úsalo con Siri.</li>
+      </ol>
+    </div>
+    <button id="testIosShortcut" class="secondary full-btn">Probar registro rápido</button>
+  </div>
+</div>
+
 <datalist id="finCategoryList">
   <option value="Arriendo"><option value="Celular"><option value="Internet"><option value="Servicios"><option value="Alimentación"><option value="Transporte"><option value="Compras"><option value="Salud"><option value="Entretenimiento"><option value="Publicidad"><option value="Muebles / negocio"><option value="Nómina"><option value="Deudas"><option value="Ahorro"><option value="Ingresos negocio"><option value="Otros">
 </datalist>
 
 <input type="file" id="importFile" accept="application/json" hidden />
-<script src="js/app.js?v=1.4.4"></script>
+<script src="js/app.js?v=1.4.5"></script>
 </body>
 </html>

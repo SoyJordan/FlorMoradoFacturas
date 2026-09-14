@@ -21,3 +21,11 @@ Estructura del proyecto:
 ### Compatibilidad de datos
 
 La clave de almacenamiento sigue siendo `florMoradoDB_v1`, por lo que esta reorganización de archivos no cambia ni reinicia los datos guardados en el navegador.
+
+
+## V1.4.5
+- Integración iOS para Finanzas mediante un único Atajo “Movimiento Flor Morado”.
+- Ruta rápida dinámica `?quick=finance` que abre el formulario financiero simplificado.
+- En modo rápido solo permite Ingreso o Gasto y guarda en el historial financiero existente.
+- Botón “Atajo iOS” dentro de Finanzas con enlace dinámico, copia al portapapeles, acceso a Atajos y prueba integrada.
+- Conserva hora de Colombia y compatibilidad con los datos existentes.
