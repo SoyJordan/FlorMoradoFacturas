@@ -1,0 +1,8 @@
+name = "flor-morado-finance-inbox"
+main = "worker.js"
+compatibility_date = "2026-09-14"
+
+# Después de crear el KV, reemplaza el id:
+[[kv_namespaces]]
+binding = "FINANCE_INBOX"
+id = "REEMPLAZAR_CON_KV_ID"
