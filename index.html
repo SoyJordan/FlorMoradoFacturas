@@ -9,13 +9,13 @@
   <title>Flor Morado Muebles</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="assets/icon-192.png" />
-  <link rel="stylesheet" href="css/styles.css?v=1.4.5" />
+  <link rel="stylesheet" href="css/styles.css?v=1.4.6" />
 </head>
 <body>
 <header class="topbar">
   <div class="brand-wrap">
     <img src="assets/logo-flor-morado.jpg" class="brand-logo" alt="Flor Morado Muebles" />
-    <div><h1>Flor Morado Muebles</h1><p>Ventas · Pedidos · Inventario · Finanzas · V1.4.5</p></div>
+    <div><h1>Flor Morado Muebles</h1><p>Ventas · Pedidos · Inventario · Finanzas · V1.4.6</p></div>
   </div>
   <button id="backupBtn" class="ghost">Backup iCloud</button>
 </header>
@@ -321,30 +321,34 @@
 <div id="iosShortcutModal" class="modal hidden">
   <div class="modal-card compact-modal">
     <button id="closeIosShortcut" class="close">×</button>
-    <span class="eyebrow">INTEGRACIÓN CON iPHONE</span>
+    <span class="eyebrow">INTEGRACIÓN CON iPHONE · SIN SAFARI</span>
     <h2>Atajo “Movimiento Flor Morado”</h2>
-    <p class="muted">Crea un único Atajo de iOS que abre directamente el registro rápido de <strong>Ingreso o Gasto</strong> en Finanzas.</p>
+    <p class="muted">El Atajo envía el ingreso o gasto a un buzón privado mediante <strong>Obtener contenido de URL</strong>. No abre Safari ni crea otro perfil de la app.</p>
     <div class="shortcut-preview">
-      <div><span>1</span><strong>Toca el Atajo</strong><small>Desde Inicio, widget o Siri</small></div>
-      <div><span>2</span><strong>Elige Ingreso o Gasto</strong><small>Completa valor, cuenta y concepto</small></div>
-      <div><span>3</span><strong>Guardar</strong><small>Queda en Finanzas con hora Colombia</small></div>
+      <div><span>1</span><strong>Ingreso o Gasto</strong><small>El Atajo pregunta los datos</small></div>
+      <div><span>2</span><strong>Envío seguro</strong><small>POST JSON al buzón financiero</small></div>
+      <div><span>3</span><strong>Sincronizar</strong><small>Flor Morado actualiza la cuenta</small></div>
     </div>
-    <label>Enlace del registro rápido<input id="iosShortcutUrl" readonly></label>
+    <label>URL del buzón financiero<input id="finSyncEndpoint" placeholder="https://tu-worker.workers.dev"></label>
+    <label>Clave privada<input id="finSyncToken" type="password" placeholder="Clave compartida con el Atajo"></label>
     <div class="actions">
-      <button id="copyIosShortcutUrl">Copiar enlace</button>
-      <button id="openShortcutsApp" class="secondary">Abrir Atajos</button>
+      <button id="saveFinSync">Guardar configuración</button>
+      <button id="syncFinNow" class="secondary">↻ Sincronizar ahora</button>
     </div>
+    <p id="finSyncStatus" class="muted small">Sin configurar.</p>
     <div class="shortcut-steps">
-      <h3>Configuración en iOS</h3>
+      <h3>Atajo de iOS</h3>
       <ol>
-        <li>Abre <strong>Atajos</strong> y crea un atajo nuevo.</li>
-        <li>Añade la acción <strong>Abrir URL</strong>.</li>
-        <li>Pega el enlace copiado arriba.</li>
-        <li>Nómbralo <strong>Movimiento Flor Morado</strong>.</li>
-        <li>Opcional: añádelo a Inicio, a un widget o úsalo con Siri.</li>
+        <li>Pregunta <strong>Ingreso o Gasto</strong>, valor, cuenta, categoría y concepto.</li>
+        <li>Usa <strong>Obtener contenido de URL</strong> con método <strong>POST</strong>.</li>
+        <li>Envía JSON con: <code>type</code>, <code>amount</code>, <code>accountName</code>, <code>category</code> y <code>note</code>.</li>
+        <li>Agrega el encabezado <code>Authorization: Bearer TU_CLAVE</code>.</li>
       </ol>
     </div>
-    <button id="testIosShortcut" class="secondary full-btn">Probar registro rápido</button>
+    <div class="actions">
+      <button id="copyShortcutJson" class="secondary">Copiar JSON de ejemplo</button>
+      <button id="openShortcutsApp" class="secondary">Abrir Atajos</button>
+    </div>
   </div>
 </div>
 
@@ -353,6 +357,6 @@
 </datalist>
 
 <input type="file" id="importFile" accept="application/json" hidden />
-<script src="js/app.js?v=1.4.5"></script>
+<script src="js/app.js?v=1.4.6"></script>
 </body>
 </html>
