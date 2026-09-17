@@ -215,9 +215,9 @@ function itemDescription(it){const p=db.products.find(x=>x.id===it.productId)||{
 function renderReceipt(s){if(!s)return;currentReceiptSaleId=s.id;const c=db.clients.find(x=>x.id===s.clientId);const rows=s.items.map(it=>`<tr><td>${itemDescription(it)}</td><td>${it.qty}</td><td>${money(it.price)}</td><td>${money(it.qty*it.price)}</td></tr>`).join('');const pays=(s.payments||[]);const payRows=pays.length?pays.map((p,i)=>`<div class="payment-row"><span>${i+1}. ${esc(p.date||'')} ${p.method?`· ${esc(p.method)}`:''}${p.note?` · ${esc(p.note)}`:''}</span><strong>${money(p.amount)}</strong></div>`).join(''):'<span class="muted">Sin abonos registrados.</span>';const b=db.settings;$('#receipt').innerHTML=`<div class="receipt"><div class="receipt-head"><img src="assets/logo-flor-morado.jpg" class="receipt-logo" alt="Logo"><div class="receipt-brand"><div class="receipt-kicker">COMPROBANTE DE VENTA / CUENTA DE COBRO</div><h2>${esc(b.name||'Flor Morado Muebles')}</h2><div class="contact">${receiptContact()}</div></div><div class="receipt-number"><span>Comprobante</span><strong>${esc(s.number)}</strong><span>${esc(s.date)}</span></div></div><div class="client-box"><strong>Cliente:</strong> ${esc(c?.name||'')}<br>${c?.phone?`<strong>Teléfono:</strong> ${esc(c.phone)}<br>`:''}${c?.address?`<strong>Dirección:</strong> ${esc(c.address)}<br>`:''}<strong>Estado del pedido:</strong> ${esc(s.orderStatus||'Pendiente')}${s.deliveryDate?`<br><strong>Fecha prometida de entrega:</strong> ${esc(s.deliveryDate)}`:''}${s.actualDeliveryDate?`<br><strong>Entregado:</strong> ${esc(s.actualDeliveryDate)}`:''}</div><table class="receipt-table"><thead><tr><th>Producto / descripción</th><th>Cant.</th><th>Precio</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><div class="receipt-total"><div><span>Subtotal</span><strong>${money(s.subtotal)}</strong></div><div><span>Transporte</span><strong>${money(s.shipping)}</strong></div><div><span>Descuento</span><strong>-${money(s.discount)}</strong></div><div class="grand"><span>Total</span><strong>${money(s.total)}</strong></div><div><span>Abonado</span><strong>${money(s.deposit)}</strong></div><div class="grand"><span>Saldo</span><strong>${money(s.balance)}</strong></div></div><div class="payments-box"><h4>Abonos registrados</h4>${payRows}</div><p><strong>Forma de pago inicial:</strong> ${esc(s.payment||'')}</p>${s.notes?`<p><strong>Observaciones:</strong> ${esc(s.notes)}</p>`:''}<div class="receipt-footer">${b.footer?`<div>${esc(b.footer)}</div>`:''}<div>Documento interno de venta. No constituye factura electrónica.</div></div></div>`;$('#paymentFromReceipt').classList.toggle('hidden',!(s.balance>0&&s.orderStatus!=='Cancelada'));$('#modal').classList.remove('hidden');}
 $('#paymentFromReceipt').onclick=()=>currentReceiptSaleId&&registerPayment(currentReceiptSaleId);$('#statusFromReceipt').onclick=()=>currentReceiptSaleId&&setOrderStatus(currentReceiptSaleId);$('#deleteReceipt').onclick=()=>currentReceiptSaleId&&deleteSale(currentReceiptSaleId);$('#closeModal').onclick=$('#closeModal2').onclick=()=>{$('#modal').classList.add('hidden');currentReceiptSaleId=null;};
 
-// ===== PDF / compartir comprobante · V1.4.7 =====
-// Genera un PDF real en el navegador, sin depender de window.print(), que es poco fiable
-// en algunas instalaciones iOS/PWA. El PDF usa fuentes estándar y no requiere librerías externas.
+// ===== PDF / compartir comprobante · V1.4.8 =====
+// Genera un PDF real con apariencia mucho más cercana al comprobante visual de la app:
+// colores de Flor Morado, logo, bloques destacados y distribución tipo plantilla.
 function pdfCp1252(ch){
   const cp=ch.codePointAt(0);
   if(cp>=32&&cp<=126)return cp;
@@ -253,80 +253,271 @@ function pdfWrap(text,maxChars){
   }
   if(line)lines.push(line); return lines;
 }
-function buildReceiptPdfBlob(s){
-  const PAGE_W=595.28,PAGE_H=841.89,M=42,TOP=800,BOTTOM=45;
-  const pages=[]; let ops=[],y=TOP,pageNo=1;
+function pdfAscii(str){return new TextEncoder().encode(str);}
+function pdfConcat(parts){const len=parts.reduce((a,p)=>a+(p?p.length:0),0);const out=new Uint8Array(len);let off=0;for(const p of parts){if(!p)continue;out.set(p,off);off+=p.length;}return out;}
+function pdfDataUrlToBytes(dataUrl){const b64=String(dataUrl||'').split(',')[1]||'';const bin=atob(b64);const out=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)out[i]=bin.charCodeAt(i);return out;}
+function pdfLoadImage(src){return new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=src;});}
+async function pdfLogoData(){
+  try{
+    const url=new URL('assets/logo-flor-morado.jpg',window.location.href).href;
+    const [resp,img]=await Promise.all([fetch(url),pdfLoadImage(url)]);
+    const bytes=new Uint8Array(await resp.arrayBuffer());
+    return {bytes,width:img.naturalWidth||300,height:img.naturalHeight||300};
+  }catch(err){
+    console.warn('No fue posible cargar el logo para el PDF.',err);
+    return null;
+  }
+}
+async function buildReceiptPdfBlobFallback(s){
+  const PAGE_W=595.28,PAGE_H=841.89,M=38,TOP=802,BOTTOM=38;
+  const C={
+    purple:[0.365,0.137,0.643],
+    cyan:[0.075,0.616,0.71],
+    text:[0.09,0.075,0.11],
+    muted:[0.38,0.35,0.39],
+    line:[0.87,0.84,0.9],
+    softPurple:[0.945,0.91,0.985],
+    softerPurple:[0.988,0.976,0.996],
+    softCyan:[0.969,0.988,0.992],
+    cyanLine:[0.843,0.941,0.957],
+    white:[1,1,1],
+    warn:[0.31,0.125,0.553]
+  };
+  const logo=await pdfLogoData();
+  const pages=[]; let ops=[],y=TOP;
   const fmt=n=>Number(n).toFixed(2).replace(/\.00$/,'');
-  const txt=(x,yy,t,size=10,bold=false)=>{ops.push(`BT /F${bold?2:1} ${fmt(size)} Tf 1 0 0 1 ${fmt(x)} ${fmt(yy)} Tm ${pdfLiteral(t)} Tj ET\n`);};
-  const line=(x1,y1,x2,y2,w=.6)=>ops.push(`${fmt(w)} w ${fmt(x1)} ${fmt(y1)} m ${fmt(x2)} ${fmt(y2)} l S\n`);
-  const newPage=()=>{if(ops.length)pages.push(ops.join(''));ops=[];y=TOP;pageNo=pages.length+1;};
-  const ensure=h=>{if(y-h<BOTTOM){newPage();header(true);}};
-  const writeWrapped=(text,x,maxChars,size=9,bold=false,leading=12)=>{const lines=pdfWrap(text,maxChars);ensure(lines.length*leading+2);for(const l of lines){txt(x,y,l,size,bold);y-=leading;}return lines.length;};
+  const rgb=a=>a.map(v=>fmt(v)).join(' ');
+  const txt=(x,yy,t,size=10,bold=false,color=C.text)=>{ops.push(`BT ${rgb(color)} rg /F${bold?2:1} ${fmt(size)} Tf 1 0 0 1 ${fmt(x)} ${fmt(yy)} Tm ${pdfLiteral(t)} Tj ET\n`);};
+  const line=(x1,y1,x2,y2,w=.6,color=C.line)=>ops.push(`${rgb(color)} RG ${fmt(w)} w ${fmt(x1)} ${fmt(y1)} m ${fmt(x2)} ${fmt(y2)} l S\n`);
+  const rect=(x,yy,w,h,opt={})=>{const fill=opt.fill||null,stroke=('stroke' in opt)?opt.stroke:C.line,lineW=opt.lineW??0.8;let s='';if(fill)s+=`${rgb(fill)} rg `;if(stroke)s+=`${rgb(stroke)} RG ${fmt(lineW)} w `;s+=`${fmt(x)} ${fmt(yy)} ${fmt(w)} ${fmt(h)} re `;s+=fill&&stroke?'B':fill?'f':stroke?'S':'n';ops.push(s+'\n');};
+  const image=(name,x,yy,w,h)=>ops.push(`q ${fmt(w)} 0 0 ${fmt(h)} ${fmt(x)} ${fmt(yy)} cm /${name} Do Q\n`);
+  const pagePush=()=>{if(ops.length)pages.push(ops.join(''));ops=[];y=TOP;};
+  const ensure=(h)=>{if(y-h<BOTTOM){pagePush();header(true);}};
+  const writeWrapped=(text,x,maxChars,size=9,bold=false,leading=12,color=C.text)=>{const lines=pdfWrap(text,maxChars);ensure(lines.length*leading+2);for(const l of lines){txt(x,y,l,size,bold,color);y-=leading;}return lines.length;};
   const b=db.settings,c=db.clients.find(x=>x.id===s.clientId);
   const header=(continued=false)=>{
-    txt(M,y,b.name||'Flor Morado Muebles',18,true); txt(415,y,continued?'Continuación':'Comprobante',8,false); y-=20;
-    txt(M,y,'COMPROBANTE DE VENTA / CUENTA DE COBRO',9,true); txt(415,y,s.number||'',13,true); y-=15;
+    const logoSize=64;
+    if(logo)image('Im1',M,TOP-64,logoSize,logoSize);
+    txt(M+(logo?78:0),TOP-5,'COMPROBANTE DE VENTA / CUENTA DE COBRO',9,true,C.cyan);
+    txt(M+(logo?78:0),TOP-26,b.name||'Flor Morado Muebles',20,true,C.purple);
     const contact=[b.address,[b.city,b.phone].filter(Boolean).join(' · '),b.email,b.social].filter(Boolean).join(' · ');
-    if(contact){writeWrapped(contact,M,88,8,false,10);}
-    txt(415,y+10,'Fecha: '+(s.date||''),9,false); y-=4; line(M,y,PAGE_W-M,y,1); y-=16;
+    let cy=TOP-40;
+    for(const l of pdfWrap(contact,58)) { txt(M+(logo?78:0),cy,l,8,false,C.muted); cy-=10; }
+    const boxX=428,boxY=TOP-56,boxW=129,boxH=58;
+    rect(boxX,boxY,boxW,boxH,{fill:C.softerPurple,stroke:C.line,lineW:0.9});
+    txt(boxX+10,TOP-14,continued?'Continuación':'Comprobante',8,false,C.muted);
+    txt(boxX+10,TOP-31,s.number||'',13,true,C.purple);
+    txt(boxX+10,TOP-46,s.date||'',8,false,C.muted);
+    line(M,TOP-74,PAGE_W-M,TOP-74,2,C.purple);
+    line(M,TOP-78,PAGE_W-M,TOP-78,1.2,C.cyan);
+    y=TOP-98;
   };
   header(false);
-  txt(M,y,'Cliente:',9,true); txt(M+48,y,c?.name||'',9,false); y-=13;
-  if(c?.phone){txt(M,y,'Teléfono:',9,true);txt(M+48,y,c.phone,9,false);y-=13;}
-  if(c?.address){txt(M,y,'Dirección:',9,true);writeWrapped(c.address,M+48,74,9,false,11);}
-  txt(M,y,'Estado:',9,true);txt(M+48,y,s.orderStatus||'Pendiente',9,false);
-  if(s.deliveryDate){txt(275,y,'Entrega:',9,true);txt(320,y,s.deliveryDate,9,false);} y-=17;
-  line(M,y,PAGE_W-M,y,.8);y-=15;
-  // encabezado de productos
-  txt(M,y,'Producto / descripción',9,true);txt(350,y,'Cant.',9,true);txt(405,y,'Precio',9,true);txt(500,y,'Total',9,true);y-=8;line(M,y,PAGE_W-M,y,.6);y-=13;
+
+  const clientLines=[];
+  clientLines.push({label:'Cliente:',value:c?.name||''});
+  if(c?.phone)clientLines.push({label:'Teléfono:',value:c.phone});
+  if(c?.address)clientLines.push({label:'Dirección:',value:c.address});
+  clientLines.push({label:'Estado del pedido:',value:s.orderStatus||'Pendiente'});
+  if(s.deliveryDate)clientLines.push({label:'Fecha prometida de entrega:',value:s.deliveryDate});
+  if(s.actualDeliveryDate)clientLines.push({label:'Entregado:',value:s.actualDeliveryDate});
+  let clientHeight=14;
+  clientLines.forEach(r=>{clientHeight+=Math.max(14,pdfWrap(r.value,62).length*12);});
+  ensure(clientHeight+10);
+  rect(M,y-clientHeight,PAGE_W-2*M,clientHeight,{fill:C.softerPurple,stroke:C.line,lineW:0.8});
+  let yy=y-16;
+  clientLines.forEach(r=>{
+    txt(M+10,yy,r.label,9,true,C.text);
+    const lines=pdfWrap(r.value,62);
+    txt(M+98,yy,lines[0]||'',9,false,C.text);
+    for(let i=1;i<lines.length;i++)txt(M+98,yy-i*12,lines[i],9,false,C.text);
+    yy-=Math.max(14,lines.length*12);
+  });
+  y-=clientHeight+16;
+
+  ensure(36);
+  rect(M,y-20,PAGE_W-2*M,20,{fill:C.softPurple,stroke:C.line,lineW:0.6});
+  txt(M+8,y-13,'Producto / descripción',9,true,C.purple);
+  txt(357,y-13,'Cant.',9,true,C.purple);
+  txt(411,y-13,'Precio',9,true,C.purple);
+  txt(504,y-13,'Total',9,true,C.purple);
+  y-=28;
+
+  const tableHeader=()=>{rect(M,y-20,PAGE_W-2*M,20,{fill:C.softPurple,stroke:C.line,lineW:0.6});txt(M+8,y-13,'Producto / descripción',9,true,C.purple);txt(357,y-13,'Cant.',9,true,C.purple);txt(411,y-13,'Precio',9,true,C.purple);txt(504,y-13,'Total',9,true,C.purple);y-=28;};
+
   for(const it of (s.items||[])){
-    const desc=pdfWrap(pdfPlainItemDescription(it),50); const rowH=Math.max(22,desc.length*11+10); ensure(rowH+20);
-    if(y>TOP-60&&pages.length>0){txt(M,y,'Producto / descripción',9,true);txt(350,y,'Cant.',9,true);txt(405,y,'Precio',9,true);txt(500,y,'Total',9,true);y-=8;line(M,y,PAGE_W-M,y,.6);y-=13;}
-    const yy=y; desc.forEach((l,i)=>txt(M,yy-i*11,l,8.5,i===0));
-    txt(360,yy,String(it.qty||0),8.5,false);txt(395,yy,money(it.price),8.5,false);txt(486,yy,money(Number(it.qty||0)*Number(it.price||0)),8.5,false);
-    y-=rowH;line(M,y+7,PAGE_W-M,y+7,.25);
+    const desc=pdfWrap(pdfPlainItemDescription(it),50);
+    const rowH=Math.max(24,desc.length*11+10);
+    ensure(rowH+10);
+    if(pages.length>0&&y>TOP-110)tableHeader();
+    const rowBottom=y-rowH+6;
+    line(M,rowBottom,PAGE_W-M,rowBottom,0.25,C.line);
+    const yyItem=y-1;
+    desc.forEach((l,i)=>txt(M+4,yyItem-i*11,l,8.5,i===0,C.text));
+    txt(368,yyItem,String(it.qty||0),8.5,false,C.text);
+    txt(401,yyItem,money(it.price),8.5,false,C.text);
+    txt(489,yyItem,money(Number(it.qty||0)*Number(it.price||0)),8.5,false,C.text);
+    y-=rowH;
   }
-  y-=5; ensure(120);
-  const totalLine=(label,val,bold=false)=>{txt(350,y,label,9,bold);txt(485,y,val,9,bold);y-=14;};
-  totalLine('Subtotal',money(s.subtotal));totalLine('Transporte',money(s.shipping));totalLine('Descuento','-'+money(s.discount));
-  totalLine('TOTAL',money(s.total),true);totalLine('Abonado',money(s.deposit));totalLine('SALDO',money(s.balance),true);y-=5;
-  ensure(65); txt(M,y,'Abonos registrados',10,true);y-=14;
-  const pays=s.payments||[];
-  if(!pays.length){txt(M,y,'Sin abonos registrados.',8.5,false);y-=13;} else for(const [i,p] of pays.entries()){ensure(18);writeWrapped(`${i+1}. ${p.date||''}${p.method?' · '+p.method:''}${p.note?' · '+p.note:''} — ${money(p.amount)}`,M,90,8.5,false,11);}
-  y-=4; ensure(50); txt(M,y,'Forma de pago inicial: '+(s.payment||''),9,false);y-=15;
-  if(s.notes){txt(M,y,'Observaciones:',9,true);y-=12;writeWrapped(s.notes,M,92,8.5,false,11);}
-  y-=8; line(M,y,PAGE_W-M,y,.5);y-=14;
-  if(b.footer){writeWrapped(b.footer,M,92,8,false,10);}
-  writeWrapped('Documento interno de venta. No constituye factura electrónica.',M,92,7.5,false,9);
+  y-=8;
+
+  const totalsTop=y; const totalsX=346, totalsW=PAGE_W-M-totalsX;
+  ensure(118);
+  line(totalsX,totalsTop, PAGE_W-M, totalsTop, 2.2, C.cyan);
+  const totalLine=(label,val,bold=false)=>{txt(totalsX,y,label,9,bold,bold?C.purple:C.text);txt(481,y,val,9,bold,bold?C.purple:C.text);y-=14;};
+  totalLine('Subtotal',money(s.subtotal));
+  totalLine('Transporte',money(s.shipping));
+  totalLine('Descuento','-'+money(s.discount));
+  totalLine('TOTAL',money(s.total),true);
+  totalLine('Abonado',money(s.deposit));
+  totalLine('SALDO',money(s.balance),true);
+  y-=4;
+
+  const payRows=s.payments||[];
+  let payHeight=34+(payRows.length?payRows.reduce((a,p,i)=>a+Math.max(16,pdfWrap(`${i+1}. ${p.date||''}${p.method?' · '+p.method:''}${p.note?' · '+p.note:''} — ${money(p.amount)}`,90).length*11),0):14);
+  ensure(payHeight+10);
+  rect(M,y-payHeight,PAGE_W-2*M,payHeight,{fill:C.softCyan,stroke:C.cyanLine,lineW:0.8});
+  txt(M+12,y-16,'Abonos registrados',10,true,C.cyan);
+  let py=y-32;
+  if(!payRows.length){txt(M+12,py,'Sin abonos registrados.',8.5,false,C.muted);py-=12;}
+  else for(const [i,p] of payRows.entries()){
+    const lines=pdfWrap(`${i+1}. ${p.date||''}${p.method?' · '+p.method:''}${p.note?' · '+p.note:''} — ${money(p.amount)}`,90);
+    lines.forEach((l,idx)=>txt(M+12,py-idx*11,l,8.5,false,C.text));
+    py-=Math.max(15,lines.length*11+2);
+    line(M+12,py+4,PAGE_W-M-12,py+4,0.25,C.cyanLine);
+  }
+  y-=payHeight+14;
+
+  ensure(70);
+  txt(M,y,'Forma de pago inicial:',9,true,C.text); txt(M+105,y,s.payment||'',9,false,C.text); y-=15;
+  if(s.notes){
+    txt(M,y,'Observaciones:',9,true,C.text); y-=12;
+    writeWrapped(s.notes,M,92,8.5,false,11,C.text);
+    y-=4;
+  }
+  line(M,y,PAGE_W-M,y,0.7,C.line); y-=12;
+  if(b.footer){writeWrapped(b.footer,M,92,8,false,10,C.muted);}
+  writeWrapped('Documento interno de venta. No constituye factura electrónica.',M,92,7.5,false,9,C.muted);
   if(ops.length)pages.push(ops.join(''));
 
-  // Construcción PDF 1.4 con fuentes Base-14. Todo el stream queda ASCII mediante escapes WinAnsi.
   const objects=[]; const add=o=>{objects.push(o);return objects.length;};
-  const catalogId=add(''); const pagesId=add('');
-  const fontId=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
-  const boldId=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+  const catalogId=add([]); const pagesId=add([]);
+  const fontId=add([pdfAscii('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>')]);
+  const boldId=add([pdfAscii('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>')]);
+  let imageId=null;
+  if(logo&&logo.bytes?.length){
+    const head=pdfAscii(`<< /Type /XObject /Subtype /Image /Width ${logo.width} /Height ${logo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${logo.bytes.length} >>\nstream\n`);
+    const tail=pdfAscii('\nendstream');
+    imageId=add([head,logo.bytes,tail]);
+  }
   const pageIds=[];
-  for(let i=0;i<pages.length;i++){
-    const stream=pages[i];
-    const contentId=add(`<< /Length ${stream.length} >>\nstream\n${stream}endstream`);
-    const pageId=add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${fmt(PAGE_W)} ${fmt(PAGE_H)}] /Resources << /Font << /F1 ${fontId} 0 R /F2 ${boldId} 0 R >> >> /Contents ${contentId} 0 R >>`);
+  for(const stream of pages){
+    const contentId=add([pdfAscii(`<< /Length ${stream.length} >>\nstream\n${stream}endstream`)]);
+    const res=`<< /Font << /F1 ${fontId} 0 R /F2 ${boldId} 0 R >>${imageId?` /XObject << /Im1 ${imageId} 0 R >>`:''} >>`;
+    const pageId=add([pdfAscii(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${fmt(PAGE_W)} ${fmt(PAGE_H)}] /Resources ${res} /Contents ${contentId} 0 R >>`)]);
     pageIds.push(pageId);
   }
-  objects[catalogId-1]=`<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
-  objects[pagesId-1]=`<< /Type /Pages /Count ${pageIds.length} /Kids [${pageIds.map(x=>x+' 0 R').join(' ')}] >>`;
-  let pdf='%PDF-1.4\n%\xE2\xE3\xCF\xD3\n',offsets=[0];
-  // cabecera binaria representada en escapes ASCII seguros
-  pdf='%PDF-1.4\n%FM-PDF\n';
-  objects.forEach((o,i)=>{offsets.push(pdf.length);pdf+=`${i+1} 0 obj\n${o}\nendobj\n`;});
-  const xref=pdf.length;pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;
-  for(let i=1;i<offsets.length;i++)pdf+=String(offsets[i]).padStart(10,'0')+' 00000 n \n';
-  pdf+=`trailer\n<< /Size ${objects.length+1} /Root ${catalogId} 0 R >>\nstartxref\n${xref}\n%%EOF`;
-  return new Blob([new TextEncoder().encode(pdf)],{type:'application/pdf'});
+  objects[catalogId-1]=[pdfAscii(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`)];
+  objects[pagesId-1]=[pdfAscii(`<< /Type /Pages /Count ${pageIds.length} /Kids [${pageIds.map(x=>x+' 0 R').join(' ')}] >>`)];
+
+  const chunks=[pdfAscii('%PDF-1.4\n%FM-PDF\n')];
+  const offsets=[0]; let offset=chunks[0].length;
+  for(let i=0;i<objects.length;i++){
+    const start=pdfAscii(`${i+1} 0 obj\n`), end=pdfAscii('\nendobj\n');
+    offsets.push(offset);
+    chunks.push(start,...objects[i],end);
+    offset+=start.length+objects[i].reduce((a,p)=>a+p.length,0)+end.length;
+  }
+  const xrefOffset=offset;
+  let xref=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;
+  for(let i=1;i<offsets.length;i++)xref+=String(offsets[i]).padStart(10,'0')+' 00000 n \n';
+  const trailer=`trailer\n<< /Size ${objects.length+1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  chunks.push(pdfAscii(xref),pdfAscii(trailer));
+  return new Blob(chunks,{type:'application/pdf'});
+}
+
+async function receiptImageAsDataUrl(src){
+  try{
+    const r=await fetch(src); const b=await r.blob();
+    return await new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=reject;fr.readAsDataURL(b);});
+  }catch(e){return src;}
+}
+function canvasToJpegBytes(canvas,quality=.94){
+  const url=canvas.toDataURL('image/jpeg',quality);
+  return pdfDataUrlToBytes(url);
+}
+function buildJpegPagesPdf(jpegs){
+  const PAGE_W=595.28,PAGE_H=841.89,M=22;
+  const objs=[];const add=parts=>{objs.push(parts);return objs.length;};
+  const catalogId=add([]),pagesId=add([]),pageIds=[];
+  for(const pg of jpegs){
+    const imgHead=pdfAscii(`<< /Type /XObject /Subtype /Image /Width ${pg.width} /Height ${pg.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${pg.bytes.length} >>\nstream\n`);
+    const imgId=add([imgHead,pg.bytes,pdfAscii('\nendstream')]);
+    const innerW=PAGE_W-2*M,innerH=PAGE_H-2*M;
+    const scale=Math.min(innerW/pg.width,innerH/pg.height);
+    const drawW=pg.width*scale,drawH=pg.height*scale;
+    const x=(PAGE_W-drawW)/2,y=(PAGE_H-drawH)/2;
+    const stream=`q ${drawW.toFixed(2)} 0 0 ${drawH.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)} cm /Im1 Do Q\n`;
+    const contentId=add([pdfAscii(`<< /Length ${stream.length} >>\nstream\n${stream}endstream`)]);
+    const pageId=add([pdfAscii(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /XObject << /Im1 ${imgId} 0 R >> >> /Contents ${contentId} 0 R >>`)]);
+    pageIds.push(pageId);
+  }
+  objs[catalogId-1]=[pdfAscii(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`)];
+  objs[pagesId-1]=[pdfAscii(`<< /Type /Pages /Count ${pageIds.length} /Kids [${pageIds.map(id=>id+' 0 R').join(' ')}] >>`)];
+  const chunks=[pdfAscii('%PDF-1.4\n%FM-VISUAL\n')],offsets=[0];let offset=chunks[0].length;
+  for(let i=0;i<objs.length;i++){
+    offsets.push(offset);
+    const a=pdfAscii(`${i+1} 0 obj\n`),b=pdfAscii('\nendobj\n');chunks.push(a,...objs[i],b);
+    offset+=a.length+objs[i].reduce((n,x)=>n+x.length,0)+b.length;
+  }
+  const xrefOffset=offset;let xref=`xref\n0 ${objs.length+1}\n0000000000 65535 f \n`;
+  for(let i=1;i<offsets.length;i++)xref+=String(offsets[i]).padStart(10,'0')+' 00000 n \n';
+  chunks.push(pdfAscii(xref),pdfAscii(`trailer\n<< /Size ${objs.length+1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`));
+  return new Blob(chunks,{type:'application/pdf'});
+}
+async function buildReceiptVisualPdfBlob(s){
+  const source=document.querySelector('#receipt .receipt');
+  if(!source)throw new Error('Vista de comprobante no disponible');
+  const clone=source.cloneNode(true);
+  // El logo se incrusta como data URL para que el SVG/canvas de iOS no dependa de recursos externos.
+  const imgs=[...clone.querySelectorAll('img')];
+  for(const img of imgs){
+    const abs=new URL(img.getAttribute('src')||'',location.href).href;
+    img.setAttribute('src',await receiptImageAsDataUrl(abs));
+  }
+  let css='';
+  try{css=await (await fetch(new URL('css/styles.css',location.href).href)).text();}catch(e){}
+  const w=Math.max(680,source.scrollWidth||source.getBoundingClientRect().width||680);
+  const h=Math.max(300,source.scrollHeight||source.getBoundingClientRect().height||300);
+  const html=`<div xmlns="http://www.w3.org/1999/xhtml" style="background:white;width:${w}px;padding:28px;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">${clone.outerHTML}</div>`;
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h+56}" viewBox="0 0 ${w} ${h+56}"><foreignObject x="0" y="0" width="100%" height="100%"><style xmlns="http://www.w3.org/1999/xhtml">${css.replace(/<\/style/gi,'<\\/style')}</style>${html}</foreignObject></svg>`;
+  const blob=new Blob([svg],{type:'image/svg+xml;charset=utf-8'}),url=URL.createObjectURL(blob);
+  try{
+    const image=await new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>resolve(im);im.onerror=reject;im.src=url;});
+    const scale=Math.min(2,1600/w);
+    const canvas=document.createElement('canvas');canvas.width=Math.round(w*scale);canvas.height=Math.round((h+56)*scale);
+    const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);
+    // Divide la captura en páginas A4 sin deformarla.
+    const pageRatio=(841.89-44)/(595.28-44); // alto/ ancho útil
+    const sliceH=Math.floor(canvas.width*pageRatio);
+    const pages=[];
+    for(let top=0;top<canvas.height;top+=sliceH){
+      const curH=Math.min(sliceH,canvas.height-top);
+      const part=document.createElement('canvas');part.width=canvas.width;part.height=curH;
+      const pctx=part.getContext('2d');pctx.fillStyle='#fff';pctx.fillRect(0,0,part.width,part.height);pctx.drawImage(canvas,0,top,canvas.width,curH,0,0,part.width,part.height);
+      pages.push({bytes:canvasToJpegBytes(part,.94),width:part.width,height:part.height});
+    }
+    if(!pages.length)throw new Error('No se pudo rasterizar el comprobante');
+    return buildJpegPagesPdf(pages);
+  }finally{URL.revokeObjectURL(url);}
+}
+async function buildReceiptPdfBlob(s){
+  try{return await buildReceiptVisualPdfBlob(s);}catch(err){console.warn('PDF visual no disponible; se usa respaldo vectorial.',err);return await buildReceiptPdfBlobFallback(s);}
 }
 async function shareReceiptPdf(){
   const s=db.sales.find(x=>x.id===currentReceiptSaleId); if(!s)return alert('No se encontró el comprobante.');
   try{
-    const blob=buildReceiptPdfBlob(s);
+    const blob=await buildReceiptPdfBlob(s);
     const safe=String(s.number||'comprobante').replace(/[^a-z0-9_-]+/gi,'-');
     const file=new File([blob],`${safe}.pdf`,{type:'application/pdf'});
     if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
