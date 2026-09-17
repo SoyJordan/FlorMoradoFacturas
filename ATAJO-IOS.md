@@ -1,6 +1,6 @@
 # Atajo iOS · Movimiento Flor Morado
 
-La V1.4.6 ya no abre Safari. El Atajo debe usar **Obtener contenido de URL** para enviar un POST JSON al buzón financiero.
+La V1.4.7 ya no abre Safari. El Atajo debe usar **Obtener contenido de URL** para enviar un POST JSON al buzón financiero.
 
 ## Flujo del Atajo
 1. Elegir de menú: `Ingreso` o `Gasto`.
