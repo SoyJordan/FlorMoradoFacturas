@@ -1,5 +1,5 @@
 
-## V1.4.7 · PDF compatible con iPhone/PWA
+## V1.4.9 · PDF compatible con iPhone/PWA
 
 - Reemplaza `window.print()` por generación local de un archivo PDF real.
 - En iPhone/iPad usa la hoja nativa de compartir cuando el navegador permite compartir archivos PDF.
@@ -31,7 +31,7 @@ Estructura del proyecto:
 La clave de almacenamiento sigue siendo `florMoradoDB_v1`, por lo que esta reorganización de archivos no cambia ni reinicia los datos guardados en el navegador.
 
 
-## V1.4.7
+## V1.4.9
 - Integración iOS para Finanzas mediante un único Atajo “Movimiento Flor Morado”.
 - Ruta rápida dinámica `?quick=finance` que abre el formulario financiero simplificado.
 - En modo rápido solo permite Ingreso o Gasto y guarda en el historial financiero existente.
@@ -39,7 +39,7 @@ La clave de almacenamiento sigue siendo `florMoradoDB_v1`, por lo que esta reorg
 - Conserva hora de Colombia y compatibilidad con los datos existentes.
 
 
-## V1.4.7 · Atajo iOS sin Safari
+## V1.4.9 · Atajo iOS sin Safari
 - Se retiró el acceso rápido basado en URL que abría Safari.
 - Nuevo buzón financiero remoto para Atajos de iOS mediante POST JSON autenticado.
 - Finanzas importa ingresos/gastos al abrir la app, al recuperar conexión o al tocar “Sincronizar ahora”.
