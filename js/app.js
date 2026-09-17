@@ -99,7 +99,7 @@ let currentReceiptSaleId=null;
 function show(v){$$('.view').forEach(x=>x.classList.toggle('active',x.id===v));$$('.tabs button').forEach(x=>x.classList.toggle('active',x.dataset.view===v));window.scrollTo({top:0,behavior:'smooth'});} 
 $$('.tabs button').forEach(b=>b.onclick=()=>show(b.dataset.view));$$('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));
 
-// ===== Atajo iOS · Buzón financiero sincronizado (V1.4.6) =====
+// ===== Atajo iOS · Buzón financiero sincronizado (V1.4.7) =====
 function financeSyncConfig(){
   return {
     endpoint:String(db.settings.financeSyncEndpoint||'').trim().replace(/\/$/,''),
@@ -213,7 +213,135 @@ $('#historySearch').addEventListener('input',renderHistory);$('#historyStatus').
 function receiptContact(){const b=db.settings;return [b.address,[b.city,b.phone].filter(Boolean).join(' · '),b.email,b.social].filter(Boolean).map(esc).join('<br>')}
 function itemDescription(it){const p=db.products.find(x=>x.id===it.productId)||{};const d={name:it.name||p.name||'Producto',ref:it.ref||p.ref||'',measures:it.measures||p.measures||'',color:it.color||p.color||'',material:it.material||p.material||'',details:it.details||p.details||'',customDetails:it.customDetails||''};const extra=[d.ref?`Ref. ${d.ref}`:'',d.measures,d.color,d.material,d.details].filter(Boolean).map(esc).join(' · ');return `<strong>${esc(d.name)}</strong>${extra?`<span class="item-detail">${extra}</span>`:''}${d.customDetails?`<span class="item-custom-print"><b>Personalización:</b> ${esc(d.customDetails)}</span>`:''}`;}
 function renderReceipt(s){if(!s)return;currentReceiptSaleId=s.id;const c=db.clients.find(x=>x.id===s.clientId);const rows=s.items.map(it=>`<tr><td>${itemDescription(it)}</td><td>${it.qty}</td><td>${money(it.price)}</td><td>${money(it.qty*it.price)}</td></tr>`).join('');const pays=(s.payments||[]);const payRows=pays.length?pays.map((p,i)=>`<div class="payment-row"><span>${i+1}. ${esc(p.date||'')} ${p.method?`· ${esc(p.method)}`:''}${p.note?` · ${esc(p.note)}`:''}</span><strong>${money(p.amount)}</strong></div>`).join(''):'<span class="muted">Sin abonos registrados.</span>';const b=db.settings;$('#receipt').innerHTML=`<div class="receipt"><div class="receipt-head"><img src="assets/logo-flor-morado.jpg" class="receipt-logo" alt="Logo"><div class="receipt-brand"><div class="receipt-kicker">COMPROBANTE DE VENTA / CUENTA DE COBRO</div><h2>${esc(b.name||'Flor Morado Muebles')}</h2><div class="contact">${receiptContact()}</div></div><div class="receipt-number"><span>Comprobante</span><strong>${esc(s.number)}</strong><span>${esc(s.date)}</span></div></div><div class="client-box"><strong>Cliente:</strong> ${esc(c?.name||'')}<br>${c?.phone?`<strong>Teléfono:</strong> ${esc(c.phone)}<br>`:''}${c?.address?`<strong>Dirección:</strong> ${esc(c.address)}<br>`:''}<strong>Estado del pedido:</strong> ${esc(s.orderStatus||'Pendiente')}${s.deliveryDate?`<br><strong>Fecha prometida de entrega:</strong> ${esc(s.deliveryDate)}`:''}${s.actualDeliveryDate?`<br><strong>Entregado:</strong> ${esc(s.actualDeliveryDate)}`:''}</div><table class="receipt-table"><thead><tr><th>Producto / descripción</th><th>Cant.</th><th>Precio</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><div class="receipt-total"><div><span>Subtotal</span><strong>${money(s.subtotal)}</strong></div><div><span>Transporte</span><strong>${money(s.shipping)}</strong></div><div><span>Descuento</span><strong>-${money(s.discount)}</strong></div><div class="grand"><span>Total</span><strong>${money(s.total)}</strong></div><div><span>Abonado</span><strong>${money(s.deposit)}</strong></div><div class="grand"><span>Saldo</span><strong>${money(s.balance)}</strong></div></div><div class="payments-box"><h4>Abonos registrados</h4>${payRows}</div><p><strong>Forma de pago inicial:</strong> ${esc(s.payment||'')}</p>${s.notes?`<p><strong>Observaciones:</strong> ${esc(s.notes)}</p>`:''}<div class="receipt-footer">${b.footer?`<div>${esc(b.footer)}</div>`:''}<div>Documento interno de venta. No constituye factura electrónica.</div></div></div>`;$('#paymentFromReceipt').classList.toggle('hidden',!(s.balance>0&&s.orderStatus!=='Cancelada'));$('#modal').classList.remove('hidden');}
-$('#paymentFromReceipt').onclick=()=>currentReceiptSaleId&&registerPayment(currentReceiptSaleId);$('#statusFromReceipt').onclick=()=>currentReceiptSaleId&&setOrderStatus(currentReceiptSaleId);$('#deleteReceipt').onclick=()=>currentReceiptSaleId&&deleteSale(currentReceiptSaleId);$('#closeModal').onclick=$('#closeModal2').onclick=()=>{$('#modal').classList.add('hidden');currentReceiptSaleId=null;};$('#printReceipt').onclick=()=>window.print();
+$('#paymentFromReceipt').onclick=()=>currentReceiptSaleId&&registerPayment(currentReceiptSaleId);$('#statusFromReceipt').onclick=()=>currentReceiptSaleId&&setOrderStatus(currentReceiptSaleId);$('#deleteReceipt').onclick=()=>currentReceiptSaleId&&deleteSale(currentReceiptSaleId);$('#closeModal').onclick=$('#closeModal2').onclick=()=>{$('#modal').classList.add('hidden');currentReceiptSaleId=null;};
+
+// ===== PDF / compartir comprobante · V1.4.7 =====
+// Genera un PDF real en el navegador, sin depender de window.print(), que es poco fiable
+// en algunas instalaciones iOS/PWA. El PDF usa fuentes estándar y no requiere librerías externas.
+function pdfCp1252(ch){
+  const cp=ch.codePointAt(0);
+  if(cp>=32&&cp<=126)return cp;
+  if(cp>=160&&cp<=255)return cp;
+  const map={8364:128,8218:130,402:131,8222:132,8230:133,8224:134,8225:135,710:136,8240:137,352:138,8249:139,338:140,381:142,8216:145,8217:146,8220:147,8221:148,8226:149,8211:150,8212:151,732:152,8482:153,353:154,8250:155,339:156,382:158,376:159};
+  return map[cp]??63;
+}
+function pdfLiteral(value){
+  let out='(';
+  for(const ch of String(value??'')){
+    const b=pdfCp1252(ch);
+    if(b===40||b===41||b===92)out+='\\'+String.fromCharCode(b);
+    else if(b<32||b>126)out+='\\'+b.toString(8).padStart(3,'0');
+    else out+=String.fromCharCode(b);
+  }
+  return out+')';
+}
+function pdfPlainItemDescription(it){
+  const p=db.products.find(x=>x.id===it.productId)||{};
+  const parts=[it.name||p.name||'Producto'];
+  const ref=it.ref||p.ref||''; if(ref)parts.push('Ref. '+ref);
+  for(const x of [it.measures||p.measures||'',it.color||p.color||'',it.material||p.material||'',it.details||p.details||''])if(x)parts.push(x);
+  const custom=it.customDetails||''; if(custom)parts.push('Personalización: '+custom);
+  return parts.join(' · ');
+}
+function pdfWrap(text,maxChars){
+  const src=String(text??'').replace(/\s+/g,' ').trim(); if(!src)return [''];
+  const words=src.split(' '),lines=[]; let line='';
+  for(const w of words){
+    if(w.length>maxChars){if(line){lines.push(line);line='';} for(let i=0;i<w.length;i+=maxChars)lines.push(w.slice(i,i+maxChars)); continue;}
+    const next=line?line+' '+w:w;
+    if(next.length>maxChars){if(line)lines.push(line);line=w;}else line=next;
+  }
+  if(line)lines.push(line); return lines;
+}
+function buildReceiptPdfBlob(s){
+  const PAGE_W=595.28,PAGE_H=841.89,M=42,TOP=800,BOTTOM=45;
+  const pages=[]; let ops=[],y=TOP,pageNo=1;
+  const fmt=n=>Number(n).toFixed(2).replace(/\.00$/,'');
+  const txt=(x,yy,t,size=10,bold=false)=>{ops.push(`BT /F${bold?2:1} ${fmt(size)} Tf 1 0 0 1 ${fmt(x)} ${fmt(yy)} Tm ${pdfLiteral(t)} Tj ET\n`);};
+  const line=(x1,y1,x2,y2,w=.6)=>ops.push(`${fmt(w)} w ${fmt(x1)} ${fmt(y1)} m ${fmt(x2)} ${fmt(y2)} l S\n`);
+  const newPage=()=>{if(ops.length)pages.push(ops.join(''));ops=[];y=TOP;pageNo=pages.length+1;};
+  const ensure=h=>{if(y-h<BOTTOM){newPage();header(true);}};
+  const writeWrapped=(text,x,maxChars,size=9,bold=false,leading=12)=>{const lines=pdfWrap(text,maxChars);ensure(lines.length*leading+2);for(const l of lines){txt(x,y,l,size,bold);y-=leading;}return lines.length;};
+  const b=db.settings,c=db.clients.find(x=>x.id===s.clientId);
+  const header=(continued=false)=>{
+    txt(M,y,b.name||'Flor Morado Muebles',18,true); txt(415,y,continued?'Continuación':'Comprobante',8,false); y-=20;
+    txt(M,y,'COMPROBANTE DE VENTA / CUENTA DE COBRO',9,true); txt(415,y,s.number||'',13,true); y-=15;
+    const contact=[b.address,[b.city,b.phone].filter(Boolean).join(' · '),b.email,b.social].filter(Boolean).join(' · ');
+    if(contact){writeWrapped(contact,M,88,8,false,10);}
+    txt(415,y+10,'Fecha: '+(s.date||''),9,false); y-=4; line(M,y,PAGE_W-M,y,1); y-=16;
+  };
+  header(false);
+  txt(M,y,'Cliente:',9,true); txt(M+48,y,c?.name||'',9,false); y-=13;
+  if(c?.phone){txt(M,y,'Teléfono:',9,true);txt(M+48,y,c.phone,9,false);y-=13;}
+  if(c?.address){txt(M,y,'Dirección:',9,true);writeWrapped(c.address,M+48,74,9,false,11);}
+  txt(M,y,'Estado:',9,true);txt(M+48,y,s.orderStatus||'Pendiente',9,false);
+  if(s.deliveryDate){txt(275,y,'Entrega:',9,true);txt(320,y,s.deliveryDate,9,false);} y-=17;
+  line(M,y,PAGE_W-M,y,.8);y-=15;
+  // encabezado de productos
+  txt(M,y,'Producto / descripción',9,true);txt(350,y,'Cant.',9,true);txt(405,y,'Precio',9,true);txt(500,y,'Total',9,true);y-=8;line(M,y,PAGE_W-M,y,.6);y-=13;
+  for(const it of (s.items||[])){
+    const desc=pdfWrap(pdfPlainItemDescription(it),50); const rowH=Math.max(22,desc.length*11+10); ensure(rowH+20);
+    if(y>TOP-60&&pages.length>0){txt(M,y,'Producto / descripción',9,true);txt(350,y,'Cant.',9,true);txt(405,y,'Precio',9,true);txt(500,y,'Total',9,true);y-=8;line(M,y,PAGE_W-M,y,.6);y-=13;}
+    const yy=y; desc.forEach((l,i)=>txt(M,yy-i*11,l,8.5,i===0));
+    txt(360,yy,String(it.qty||0),8.5,false);txt(395,yy,money(it.price),8.5,false);txt(486,yy,money(Number(it.qty||0)*Number(it.price||0)),8.5,false);
+    y-=rowH;line(M,y+7,PAGE_W-M,y+7,.25);
+  }
+  y-=5; ensure(120);
+  const totalLine=(label,val,bold=false)=>{txt(350,y,label,9,bold);txt(485,y,val,9,bold);y-=14;};
+  totalLine('Subtotal',money(s.subtotal));totalLine('Transporte',money(s.shipping));totalLine('Descuento','-'+money(s.discount));
+  totalLine('TOTAL',money(s.total),true);totalLine('Abonado',money(s.deposit));totalLine('SALDO',money(s.balance),true);y-=5;
+  ensure(65); txt(M,y,'Abonos registrados',10,true);y-=14;
+  const pays=s.payments||[];
+  if(!pays.length){txt(M,y,'Sin abonos registrados.',8.5,false);y-=13;} else for(const [i,p] of pays.entries()){ensure(18);writeWrapped(`${i+1}. ${p.date||''}${p.method?' · '+p.method:''}${p.note?' · '+p.note:''} — ${money(p.amount)}`,M,90,8.5,false,11);}
+  y-=4; ensure(50); txt(M,y,'Forma de pago inicial: '+(s.payment||''),9,false);y-=15;
+  if(s.notes){txt(M,y,'Observaciones:',9,true);y-=12;writeWrapped(s.notes,M,92,8.5,false,11);}
+  y-=8; line(M,y,PAGE_W-M,y,.5);y-=14;
+  if(b.footer){writeWrapped(b.footer,M,92,8,false,10);}
+  writeWrapped('Documento interno de venta. No constituye factura electrónica.',M,92,7.5,false,9);
+  if(ops.length)pages.push(ops.join(''));
+
+  // Construcción PDF 1.4 con fuentes Base-14. Todo el stream queda ASCII mediante escapes WinAnsi.
+  const objects=[]; const add=o=>{objects.push(o);return objects.length;};
+  const catalogId=add(''); const pagesId=add('');
+  const fontId=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+  const boldId=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+  const pageIds=[];
+  for(let i=0;i<pages.length;i++){
+    const stream=pages[i];
+    const contentId=add(`<< /Length ${stream.length} >>\nstream\n${stream}endstream`);
+    const pageId=add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${fmt(PAGE_W)} ${fmt(PAGE_H)}] /Resources << /Font << /F1 ${fontId} 0 R /F2 ${boldId} 0 R >> >> /Contents ${contentId} 0 R >>`);
+    pageIds.push(pageId);
+  }
+  objects[catalogId-1]=`<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
+  objects[pagesId-1]=`<< /Type /Pages /Count ${pageIds.length} /Kids [${pageIds.map(x=>x+' 0 R').join(' ')}] >>`;
+  let pdf='%PDF-1.4\n%\xE2\xE3\xCF\xD3\n',offsets=[0];
+  // cabecera binaria representada en escapes ASCII seguros
+  pdf='%PDF-1.4\n%FM-PDF\n';
+  objects.forEach((o,i)=>{offsets.push(pdf.length);pdf+=`${i+1} 0 obj\n${o}\nendobj\n`;});
+  const xref=pdf.length;pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;
+  for(let i=1;i<offsets.length;i++)pdf+=String(offsets[i]).padStart(10,'0')+' 00000 n \n';
+  pdf+=`trailer\n<< /Size ${objects.length+1} /Root ${catalogId} 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return new Blob([new TextEncoder().encode(pdf)],{type:'application/pdf'});
+}
+async function shareReceiptPdf(){
+  const s=db.sales.find(x=>x.id===currentReceiptSaleId); if(!s)return alert('No se encontró el comprobante.');
+  try{
+    const blob=buildReceiptPdfBlob(s);
+    const safe=String(s.number||'comprobante').replace(/[^a-z0-9_-]+/gi,'-');
+    const file=new File([blob],`${safe}.pdf`,{type:'application/pdf'});
+    if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:`Comprobante ${s.number||''}`,text:`Comprobante de ${db.settings.name||'Flor Morado Muebles'}`});
+      return;
+    }
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=`${safe}.pdf`;a.target='_blank';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }catch(err){
+    if(err&&err.name==='AbortError')return;
+    console.error('Error generando/compartiendo PDF',err);
+    alert('No fue posible generar el PDF. Intenta cerrar y volver a abrir la app.');
+  }
+}
+$('#printReceipt').onclick=shareReceiptPdf;
 
 function saleProfit(s){const cogs=(s.items||[]).reduce((a,it)=>{const p=db.products.find(x=>x.id===it.productId);const cost=('cost'in it)?Number(it.cost||0):Number(p?.cost||0);return a+cost*Number(it.qty||0)},0);return Number(s.total||0)-cogs-Number(s.shippingExpense||0)-Number(s.otherExpenses||0);}
 function virtualCashMovements(){const arr=[];for(const s of db.sales){const c=db.clients.find(x=>x.id===s.clientId);for(const p of s.payments||[])arr.push({id:'pay_'+p.id,date:p.date||s.date,time:p.time||'',createdAt:p.createdAt||'',type:'income',category:'Abono cliente',note:`${s.number} · ${c?.name||'Cliente'}${p.note?' · '+p.note:''}`,amount:Number(p.amount||0),automatic:true,saleId:s.id});if(s.orderStatus!=='Cancelada'&&Number(s.shippingExpense||0)>0)arr.push({id:'ship_'+s.id,date:s.date,time:s.time||'',createdAt:s.createdAt||'',type:'expense',category:'Transporte de venta',note:s.number,amount:Number(s.shippingExpense||0),automatic:true,saleId:s.id});if(s.orderStatus!=='Cancelada'&&Number(s.otherExpenses||0)>0)arr.push({id:'other_'+s.id,date:s.date,time:s.time||'',createdAt:s.createdAt||'',type:'expense',category:'Otros gastos de venta',note:s.number,amount:Number(s.otherExpenses||0),automatic:true,saleId:s.id});}return [...arr,...db.cashMovements];}
@@ -371,7 +499,7 @@ function backupStamp(){
  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
 }
 function backupFileName(){return `FlorMorado_Backup_${backupStamp()}.json`;}
-function backupPayload(){return JSON.stringify({...db,_backup:{app:'Flor Morado Muebles',version:'1.4.6',createdAt:new Date().toISOString()}},null,2);}
+function backupPayload(){return JSON.stringify({...db,_backup:{app:'Flor Morado Muebles',version:'1.4.7',createdAt:new Date().toISOString()}},null,2);}
 function updateBackupUi(){
  const el=$('#lastBackupText'),warn=$('#backupWarning'); if(!el||!warn)return;
  const raw=db.settings.lastBackupAt;
@@ -419,7 +547,7 @@ $('#restoreBackup').onclick=()=>$('#importFile').click();
 $('#importFile').onchange=e=>{const f=e.target.files[0];if(f)restoreBackupFile(f);};
 
 $('#saleDate').value=today();$('#cashDate').value=today();renderAll();updateBackupUi();addSaleItem();calcSale();refreshFinanceSyncUi(); if(financeSyncReady())syncFinanceInbox({silent:true});
-if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=1.4.6',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
+if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=1.4.7',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
 
 // Revisa el buzón al volver a primer plano, sin interrumpir al usuario.
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&financeSyncReady())syncFinanceInbox({silent:true});});
