@@ -120,7 +120,7 @@
         <label>Material<input id="prodMaterial" placeholder="Ej. Tela antifluido, roble..." /></label>
         <label>Costo<input id="prodCost" type="number" min="0" step="1000" /></label>
         <label>Precio base<input id="prodPrice" type="number" min="0" step="1000" /></label>
-        <label class="full-span">Variantes de precio<textarea id="prodVariants" rows="4" placeholder="Una por línea. Ej.: 100 cm = 950000&#10;140 cm = 1150000&#10;160 cm = 1350000"></textarea><small class="muted">Puedes usar medidas, tamaños o cualquier variante. El precio se cargará automáticamente al facturar.</small></label>
+        <label class="full-span">Precios por medida / variante<textarea id="prodVariants" rows="5" placeholder="Una por línea: Medida | Costo | Venta&#10;100 cm | 750000 | 950000&#10;140 cm | 900000 | 1150000&#10;160 cm | 1050000 | 1350000"></textarea><small class="muted">Cada medida guarda su costo y su precio de venta. Al facturar eliges la medida y la app usa esos valores para calcular venta y utilidad.</small></label>
       </div>
       <label>Información adicional para el comprobante
         <textarea id="prodDetails" rows="3" placeholder="Descripción, especificaciones, contenido, garantía u otra información que quieras mostrar al cliente."></textarea>
