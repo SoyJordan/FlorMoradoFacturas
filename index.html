@@ -27,7 +27,6 @@
   <button data-view="inventory">Inventario</button>
   <button data-view="receivables">Cartera</button>
   <button data-view="history">Pedidos</button>
-  <button data-view="cash">Caja</button>
   <button data-view="finance">Finanzas</button>
   <button data-view="settings">Configuración</button>
 </nav>
@@ -40,7 +39,7 @@
       <article><span>Utilidad estimada</span><strong id="statProfit">$0</strong></article>
       <article><span>Cartera pendiente</span><strong id="statDebt">$0</strong></article>
       <article><span>Gastos del mes</span><strong id="statExpenses">$0</strong></article>
-      <article><span>Saldo de caja</span><strong id="statCash">$0</strong></article>
+      <article><span>Saldo efectivo y bancos</span><strong id="statCash">$0</strong></article>
       <article><span>Pedidos por entregar</span><strong id="statPending">0</strong></article>
       <article><span>Productos con stock bajo</span><strong id="statLow">0</strong></article>
     </div>
@@ -49,7 +48,7 @@
       <div class="actions">
         <button data-go="sale">Crear comprobante</button>
         <button data-go="history" class="secondary">Ver pedidos</button>
-        <button data-go="cash" class="secondary">Registrar gasto</button>
+        <button data-go="finance" class="secondary">Ir a Finanzas</button>
         <button data-go="inventory" class="secondary">Agregar producto</button>
       </div>
     </div>
@@ -70,7 +69,7 @@
         <label>Transporte cobrado al cliente<input id="saleShipping" type="number" min="0" step="1000" value="0" /></label>
         <label>Descuento<input id="saleDiscount" type="number" min="0" step="1000" value="0" /></label>
         <label>Abono inicial<input id="saleDeposit" type="number" min="0" step="1000" value="0" /></label>
-        <label>Método de pago<select id="salePayment"><option>Efectivo</option><option>Transferencia</option><option>Nequi</option><option>Daviplata</option><option>Otro</option></select></label>
+        <label>Cuenta donde ingresa el abono<select id="salePayment"><option value="">Seleccionar cuenta de Finanzas</option></select></label>
       </div>
       <div class="internal-box">
         <h3>Costos internos de esta venta <span>No aparecen en el comprobante</span></h3>
@@ -80,9 +79,9 @@
         </div>
       </div>
       <h3>Productos</h3>
-      <p class="muted small">En “Personalización” puedes anotar tela, color, medidas especiales, madera, cambios solicitados u otros detalles del pedido. Esa información aparecerá en el comprobante.</p>
+      <p class="muted small">Puedes personalizar medidas, color y material solo para esta factura, sin modificar la ficha del inventario. Los detalles adicionales también aparecerán en el comprobante.</p>
       <div id="saleItems"></div>
-      <button id="addSaleItem" class="secondary">+ Agregar producto</button>
+      <div class="actions"><button id="addSaleItem" class="secondary">+ Agregar producto</button><button id="createProductFromSale" class="secondary">+ Crear producto desde esta factura</button></div>
       <div class="totals">
         <div><span>Subtotal</span><strong id="saleSubtotal">$0</strong></div>
         <div><span>Total</span><strong id="saleTotal">$0</strong></div>
@@ -154,7 +153,7 @@
     </div>
   </section>
 
-  <section id="cash" class="view">
+  <section id="cash" class="view hidden" aria-hidden="true">
     <div class="grid stats cash-stats">
       <article><span>Ingresos del mes</span><strong id="cashIncomeMonth">$0</strong></article>
       <article><span>Gastos del mes</span><strong id="cashExpenseMonth">$0</strong></article>
@@ -267,7 +266,7 @@
     </div>
     <div class="card" id="backupCard">
       <h2>Respaldo de datos</h2>
-      <p class="muted">Crea una copia completa de clientes, productos, ventas, abonos, caja, configuración y Finanzas. En iPhone elige <strong>Guardar en Archivos → iCloud Drive</strong>.</p>
+      <p class="muted">Crea una copia completa de clientes, productos, ventas, abonos, configuración y Finanzas. En iPhone elige <strong>Guardar en Archivos → iCloud Drive</strong>.</p>
       <div class="backup-status"><span>Último backup</span><strong id="lastBackupText">Nunca</strong></div>
       <div id="backupWarning" class="backup-warning hidden"></div>
       <div class="actions">
@@ -285,6 +284,7 @@
     <div id="receipt"></div>
     <div class="actions no-print receipt-actions">
       <button id="paymentFromReceipt" class="secondary hidden">+ Registrar abono</button>
+      <button id="editReceipt" class="secondary">Editar factura</button>
       <button id="statusFromReceipt" class="secondary">Cambiar estado</button>
       <button id="printReceipt">Compartir / Guardar PDF</button>
       <button id="deleteReceipt" class="danger-btn">Eliminar comprobante</button>
