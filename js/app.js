@@ -254,7 +254,10 @@ function pdfPlainItemDescription(it){
   const p=db.products.find(x=>x.id===it.productId)||{};
   const parts=[it.name||p.name||'Producto'];
   const ref=it.ref||p.ref||''; if(ref)parts.push('Ref. '+ref);
-  for(const x of [it.measures||p.measures||'',it.color||p.color||'',it.material||p.material||'',it.details||p.details||''])if(x)parts.push(x);
+  const variant=it.variantName||it.variant||'';
+  const measures=it.measures||p.measures||'';
+  if(variant && !String(measures).toLowerCase().includes(String(variant).toLowerCase()))parts.push('Medida/variante: '+variant);
+  for(const x of [measures,it.color||p.color||'',it.material||p.material||'',it.details||p.details||''])if(x)parts.push(x);
   const custom=it.customDetails||''; if(custom)parts.push('Personalización: '+custom);
   return parts.join(' · ');
 }
@@ -389,14 +392,14 @@ async function buildReceiptPdfBlobFallback(s){
   y-=4;
 
   const payRows=s.payments||[];
-  let payHeight=34+(payRows.length?payRows.reduce((a,p,i)=>a+Math.max(16,pdfWrap(`${i+1}. ${p.date||''}${p.method?' · '+p.method:''}${p.note?' · '+p.note:''} — ${money(p.amount)}`,90).length*11),0):14);
+  let payHeight=34+(payRows.length?payRows.reduce((a,p,i)=>a+Math.max(16,pdfWrap(`${i+1}. ${p.date||''}${p.method?' · '+p.method:''}${(p.accountName||p.account)?' · Cuenta: '+(p.accountName||p.account):''}${p.note?' · '+p.note:''} — ${money(p.amount)}`,90).length*11),0):14);
   ensure(payHeight+10);
   rect(M,y-payHeight,PAGE_W-2*M,payHeight,{fill:C.softCyan,stroke:C.cyanLine,lineW:0.8});
   txt(M+12,y-16,'Abonos registrados',10,true,C.cyan);
   let py=y-32;
   if(!payRows.length){txt(M+12,py,'Sin abonos registrados.',8.5,false,C.muted);py-=12;}
   else for(const [i,p] of payRows.entries()){
-    const lines=pdfWrap(`${i+1}. ${p.date||''}${p.method?' · '+p.method:''}${p.note?' · '+p.note:''} — ${money(p.amount)}`,90);
+    const lines=pdfWrap(`${i+1}. ${p.date||''}${p.method?' · '+p.method:''}${(p.accountName||p.account)?' · Cuenta: '+(p.accountName||p.account):''}${p.note?' · '+p.note:''} — ${money(p.amount)}`,90);
     lines.forEach((l,idx)=>txt(M+12,py-idx*11,l,8.5,false,C.text));
     py-=Math.max(15,lines.length*11+2);
     line(M+12,py+4,PAGE_W-M-12,py+4,0.25,C.cyanLine);
@@ -526,11 +529,10 @@ async function buildReceiptVisualPdfBlob(s){
   }finally{URL.revokeObjectURL(url);}
 }
 async function buildReceiptPdfBlob(s){
-  // IMPORTANTE: el PDF compartido se genera directamente desde la misma vista
-  // previa que ve el usuario. Así WhatsApp recibe exactamente el diseño nuevo
-  // y no una segunda plantilla/vectorial distinta. Si la captura visual falla,
-  // mostramos el error en vez de compartir silenciosamente el diseño anterior.
-  return await buildReceiptVisualPdfBlob(s);
+  // v1.5.5: una sola fuente de PDF para descargar y compartir.
+  // Evita SVG/foreignObject/canvas, que falla de forma intermitente en iOS.
+  // WhatsApp y la descarga reciben exactamente este mismo Blob.
+  return await buildReceiptPdfBlobFallback(s);
 }
 async function shareReceiptPdf(){
   const s=db.sales.find(x=>x.id===currentReceiptSaleId); if(!s)return alert('No se encontró el comprobante.');
