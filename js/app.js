@@ -287,7 +287,7 @@ async function pdfLogoData(){
   }
 }
 async function buildReceiptPdfBlobFallback(s){
-  // Flor Morado v1.5.7 · plantilla vectorial aprobada y verificada.
+  // Flor Morado v1.5.8 · plantilla vectorial con espaciado corregido.
   // Este es el único PDF usado por descarga y por Compartir/WhatsApp.
   const PAGE_W=595.28,PAGE_H=841.89,M=22,TOP=820,BOTTOM=28;
   const C={
@@ -391,7 +391,7 @@ async function buildReceiptPdfBlobFallback(s){
   const pays=s.payments||[];
   const leftX=M,leftBoxW=324,rightBoxX=leftX+leftBoxW+12,rightBoxW=PAGE_W-M-rightBoxX;
   const payH=Math.max(102,48+(pays.length||1)*22);
-  const summaryH=126,blockH=Math.max(payH,summaryH);
+  const summaryH=148,blockH=Math.max(payH,summaryH);
   ensure(blockH+82);
   rect(leftX,y-blockH,leftBoxW,blockH,{fill:C.white,stroke:C.line});
   txt(leftX+12,y-17,'Abonos registrados',10.5,true,C.purple);
@@ -409,13 +409,23 @@ async function buildReceiptPdfBlobFallback(s){
 
   rect(rightBoxX,y-summaryH,rightBoxW,summaryH,{fill:C.white,stroke:C.line});
   txt(rightBoxX+12,y-17,'Resumen de la cuenta',10.5,true,C.purple);
-  let sy=y-37;
-  const sumLine=(lab,val,bold=false)=>{txt(rightBoxX+12,sy,lab,8,bold);txt(rightBoxX+112,sy,val,8,bold);sy-=16;};
-  sumLine('Subtotal',moneyPdf(s.subtotal));sumLine('Transporte',moneyPdf(s.shipping));
+  let sy=y-38;
+  const sumLine=(lab,val,bold=false)=>{txt(rightBoxX+12,sy,lab,8,bold);txt(rightBoxX+112,sy,val,8,bold);sy-=18;};
+  sumLine('Subtotal',moneyPdf(s.subtotal));
+  sumLine('Transporte',moneyPdf(s.shipping));
   sumLine('Descuento','- '+moneyPdf(s.discount));
-  rect(rightBoxX+8,sy-5,rightBoxW-16,21,{fill:C.soft2,stroke:null});sumLine('TOTAL',moneyPdf(s.total),true);
-  sumLine('Abonado',moneyPdf(s.deposit));
-  rect(rightBoxX+8,sy-6,rightBoxW-16,23,{fill:C.purple,stroke:C.purple});
+
+  sy-=2;
+  rect(rightBoxX+8,sy-7,rightBoxW-16,24,{fill:C.soft2,stroke:null});
+  txt(rightBoxX+12,sy+1,'TOTAL',8.5,true,C.text);
+  txt(rightBoxX+112,sy+1,moneyPdf(s.total),8.8,true,C.text);
+  sy-=29;
+
+  txt(rightBoxX+12,sy,'Abonado',8,false,C.text);
+  txt(rightBoxX+112,sy,moneyPdf(s.deposit),8,false,C.text);
+  sy-=25;
+
+  rect(rightBoxX+8,sy-8,rightBoxW-16,25,{fill:C.purple,stroke:C.purple});
   txt(rightBoxX+14,sy+1,'SALDO PENDIENTE',8.2,true,C.white);
   txt(rightBoxX+112,sy+1,moneyPdf(s.balance),9.2,true,C.white);
   y-=blockH+12;
@@ -431,7 +441,7 @@ async function buildReceiptPdfBlobFallback(s){
   txt(M,y,'Gracias por su compra.',10,true,C.purple);
   txt(PAGE_W-M-205,y,'Documento interno de venta.',7,false,C.muted);
   txt(PAGE_W-M-205,y-10,'No constituye factura electrónica.',7,false,C.muted);
-  txt(PAGE_W-M-205,y-20,'Formato PDF v1.5.7',6,false,C.muted);
+  txt(PAGE_W-M-205,y-20,'Formato PDF v1.5.8',6,false,C.muted);
 
   if(ops.length)pages.push(ops.join(''));
 
@@ -452,7 +462,7 @@ async function buildReceiptPdfBlobFallback(s){
   }
   objects[catalogId-1]=[pdfAscii(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`)];
   objects[pagesId-1]=[pdfAscii(`<< /Type /Pages /Count ${pageIds.length} /Kids [${pageIds.map(x=>x+' 0 R').join(' ')}] >>`)];
-  const chunks=[pdfAscii('%PDF-1.4\n%FM-1.5.7\n')],offsets=[0];let offset=chunks[0].length;
+  const chunks=[pdfAscii('%PDF-1.4\n%FM-1.5.8\n')],offsets=[0];let offset=chunks[0].length;
   for(let i=0;i<objects.length;i++){offsets.push(offset);const a=pdfAscii(`${i+1} 0 obj\n`),z=pdfAscii('\nendobj\n');chunks.push(a,...objects[i],z);offset+=a.length+objects[i].reduce((n,p)=>n+p.length,0)+z.length;}
   const xrefOffset=offset;let xref=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;
   for(let i=1;i<offsets.length;i++)xref+=String(offsets[i]).padStart(10,'0')+' 00000 n \n';
