@@ -429,7 +429,7 @@ button.secondary,.ghost {
   font-size:24px
 }
 .receipt-brand .contact {
-  font-size:11px;
+  font-size:12px;
   color:#5e5963;
   line-height:1.45;
   margin-top:4px
@@ -459,33 +459,37 @@ button.secondary,.ghost {
   width:100%;
   border-collapse:collapse;
   margin:16px 0;
-  font-size:13px
+  font-size:15px;
+  line-height:1.45;
 }
 .receipt-table th {
   background:#f1e8fb;
   color:#51208d
 }
 .receipt-table th,.receipt-table td {
-  border-bottom:1px solid #ddd;
-  padding:8px;
+  border:1px solid #e4dced;
+  padding:11px 10px;
   text-align:left;
-  vertical-align:top
+  vertical-align:top;
+  line-height:1.45
 }
+.receipt-table tbody tr:nth-child(even) { background:#faf7fd; }
+.receipt-table tbody tr { break-inside:avoid; }
 .receipt-table th:last-child,.receipt-table td:last-child {
   text-align:right
 }
 .item-detail {
   display:block;
   color:#666;
-  font-size:11px;
-  line-height:1.35;
+  font-size:12px;
+  line-height:1.45;
   margin-top:3px
 }
 .item-custom-print {
   display:block;
   color:#3f2556;
-  font-size:11px;
-  line-height:1.4;
+  font-size:12px;
+  line-height:1.5;
   margin-top:5px;
   padding:5px 7px;
   background:#f8f1fd;
@@ -521,8 +525,9 @@ button.secondary,.ghost {
   display:flex;
   justify-content:space-between;
   gap:8px;
-  font-size:12px;
-  padding:4px 0;
+  font-size:13px;
+  line-height:1.45;
+  padding:7px 0;
   border-bottom:1px dotted #cfdfe2
 }
 .receipt-footer {
