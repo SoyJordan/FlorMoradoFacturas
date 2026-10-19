@@ -71,3 +71,10 @@ La clave de almacenamiento sigue siendo `florMoradoDB_v1`, por lo que esta reorg
 - Rediseño completo del generador vectorial PDF usado por Compartir/WhatsApp y descarga.
 - Logo original, tarjetas de cliente/estado, tabla profesional de productos, abonos ampliados, resumen y saldo destacado.
 - Se conserva la lógica de medidas/variantes con costo y precio de venta.
+
+
+## v1.5.7
+- Base reconstruida desde el ZIP descargado del repositorio publicado.
+- Versión visible corregida a V1.5.7.
+- Un único generador PDF para descarga y Compartir/WhatsApp.
+- Marca discreta "Formato PDF v1.5.7" para verificar que el archivo compartido corresponde al generador nuevo.
