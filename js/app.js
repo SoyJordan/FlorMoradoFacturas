@@ -526,8 +526,11 @@ async function buildReceiptVisualPdfBlob(s){
   }finally{URL.revokeObjectURL(url);}
 }
 async function buildReceiptPdfBlob(s){
-  // Generador vectorial determinista: evita que iOS falle con foreignObject y vuelva al diseño antiguo.
-  return await buildReceiptPdfBlobFallback(s);
+  // IMPORTANTE: el PDF compartido se genera directamente desde la misma vista
+  // previa que ve el usuario. Así WhatsApp recibe exactamente el diseño nuevo
+  // y no una segunda plantilla/vectorial distinta. Si la captura visual falla,
+  // mostramos el error en vez de compartir silenciosamente el diseño anterior.
+  return await buildReceiptVisualPdfBlob(s);
 }
 async function shareReceiptPdf(){
   const s=db.sales.find(x=>x.id===currentReceiptSaleId); if(!s)return alert('No se encontró el comprobante.');
@@ -705,7 +708,7 @@ function backupStamp(){
  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
 }
 function backupFileName(){return `FlorMorado_Backup_${backupStamp()}.json`;}
-function backupPayload(){return JSON.stringify({...db,_backup:{app:'Flor Morado Muebles',version:'1.5.0',createdAt:new Date().toISOString()}},null,2);}
+function backupPayload(){return JSON.stringify({...db,_backup:{app:'Flor Morado Muebles',version:'1.5.4',createdAt:new Date().toISOString()}},null,2);}
 function updateBackupUi(){
  const el=$('#lastBackupText'),warn=$('#backupWarning'); if(!el||!warn)return;
  const raw=db.settings.lastBackupAt;
@@ -753,7 +756,7 @@ $('#restoreBackup').onclick=()=>$('#importFile').click();
 $('#importFile').onchange=e=>{const f=e.target.files[0];if(f)restoreBackupFile(f);};
 
 $('#saleDate').value=today();$('#cashDate').value=today();renderAll();updateBackupUi();addSaleItem();calcSale();refreshFinanceSyncUi(); if(financeSyncReady())syncFinanceInbox({silent:true});
-if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=1.5.0',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
+if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=1.5.4',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
 
 // Revisa el buzón al volver a primer plano, sin interrumpir al usuario.
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&financeSyncReady())syncFinanceInbox({silent:true});});
