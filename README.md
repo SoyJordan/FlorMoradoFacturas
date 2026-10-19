@@ -65,3 +65,9 @@ La clave de almacenamiento sigue siendo `florMoradoDB_v1`, por lo que esta reorg
 ## v1.5.5
 - Unificación de caché/versionado en index.html, app.js, styles.css y sw.js.
 - PDF compartido y descargado usa un único generador nativo compatible con iOS; se elimina la dependencia de SVG/foreignObject para compartir.
+
+
+## v1.5.6
+- Rediseño completo del generador vectorial PDF usado por Compartir/WhatsApp y descarga.
+- Logo original, tarjetas de cliente/estado, tabla profesional de productos, abonos ampliados, resumen y saldo destacado.
+- Se conserva la lógica de medidas/variantes con costo y precio de venta.
