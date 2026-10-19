@@ -1,10 +1,10 @@
-const CACHE = 'flor-morado-v1-5-7';
+const CACHE = 'flor-morado-v1-5-8';
 
 const ASSETS = [
   './',
   './index.html',
-  './css/styles.css?v=1.5.7',
-  './js/app.js?v=1.5.7',
+  './css/styles.css?v=1.5.8',
+  './js/app.js?v=1.5.8',
   './manifest.json',
   './assets/logo-flor-morado.jpg',
   './assets/icon-192.png',
