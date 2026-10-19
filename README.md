@@ -1,3 +1,15 @@
+# Flor Morado Muebles · V1.5.2
+
+## Cambios de esta versión
+- Nuevo diseño profesional del comprobante/PDF con el logo original de Flor Morado Muebles.
+- Productos solo en texto, sin fotografías; filas más legibles y descriptivas.
+- Se eliminó “Forma de pago inicial” del comprobante y se amplió “Abonos registrados”.
+- Resumen de cuenta con Total, Abonado y Saldo pendiente destacados.
+- Variantes de precio por producto: medida/tamaño/configuración + precio, sin duplicar referencias.
+- Al facturar, seleccionar una variante carga su precio automáticamente; el precio sigue siendo editable para esa factura.
+- Se mantienen personalizaciones por factura, edición de facturas confirmadas, Finanzas, Cloudflare y atajo iOS.
+- La interfaz de Inventario no muestra controles de stock.
+
 
 ## V1.5.0 · PDF compatible con iPhone/PWA
 
