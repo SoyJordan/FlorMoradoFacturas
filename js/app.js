@@ -287,7 +287,7 @@ async function pdfLogoData(){
   }
 }
 async function buildReceiptPdfBlobFallback(s){
-  // Flor Morado v1.5.6 · plantilla vectorial aprobada.
+  // Flor Morado v1.5.7 · plantilla vectorial aprobada y verificada.
   // Este es el único PDF usado por descarga y por Compartir/WhatsApp.
   const PAGE_W=595.28,PAGE_H=841.89,M=22,TOP=820,BOTTOM=28;
   const C={
@@ -431,6 +431,7 @@ async function buildReceiptPdfBlobFallback(s){
   txt(M,y,'Gracias por su compra.',10,true,C.purple);
   txt(PAGE_W-M-205,y,'Documento interno de venta.',7,false,C.muted);
   txt(PAGE_W-M-205,y-10,'No constituye factura electrónica.',7,false,C.muted);
+  txt(PAGE_W-M-205,y-20,'Formato PDF v1.5.7',6,false,C.muted);
 
   if(ops.length)pages.push(ops.join(''));
 
@@ -451,7 +452,7 @@ async function buildReceiptPdfBlobFallback(s){
   }
   objects[catalogId-1]=[pdfAscii(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`)];
   objects[pagesId-1]=[pdfAscii(`<< /Type /Pages /Count ${pageIds.length} /Kids [${pageIds.map(x=>x+' 0 R').join(' ')}] >>`)];
-  const chunks=[pdfAscii('%PDF-1.4\n%FM-1.5.6\n')],offsets=[0];let offset=chunks[0].length;
+  const chunks=[pdfAscii('%PDF-1.4\n%FM-1.5.7\n')],offsets=[0];let offset=chunks[0].length;
   for(let i=0;i<objects.length;i++){offsets.push(offset);const a=pdfAscii(`${i+1} 0 obj\n`),z=pdfAscii('\nendobj\n');chunks.push(a,...objects[i],z);offset+=a.length+objects[i].reduce((n,p)=>n+p.length,0)+z.length;}
   const xrefOffset=offset;let xref=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;
   for(let i=1;i<offsets.length;i++)xref+=String(offsets[i]).padStart(10,'0')+' 00000 n \n';
