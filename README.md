@@ -60,3 +60,8 @@ La clave de almacenamiento sigue siendo `florMoradoDB_v1`, por lo que esta reorg
 - Se incluye `backend/worker.js`, `backend/wrangler.toml.example` y `ATAJO-IOS.md`.
 
 > Requisito: desplegar el backend incluido y configurar su URL HTTPS + clave privada dentro de Finanzas. Sin un endpoint remoto, iOS no puede escribir en el almacenamiento privado de una PWA cerrada.
+
+
+## v1.5.5
+- Unificación de caché/versionado en index.html, app.js, styles.css y sw.js.
+- PDF compartido y descargado usa un único generador nativo compatible con iOS; se elimina la dependencia de SVG/foreignObject para compartir.
