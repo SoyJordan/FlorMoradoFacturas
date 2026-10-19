@@ -287,172 +287,177 @@ async function pdfLogoData(){
   }
 }
 async function buildReceiptPdfBlobFallback(s){
-  const PAGE_W=595.28,PAGE_H=841.89,M=38,TOP=802,BOTTOM=38;
+  // Flor Morado v1.5.6 · plantilla vectorial aprobada.
+  // Este es el único PDF usado por descarga y por Compartir/WhatsApp.
+  const PAGE_W=595.28,PAGE_H=841.89,M=22,TOP=820,BOTTOM=28;
   const C={
-    purple:[0.365,0.137,0.643],
-    cyan:[0.075,0.616,0.71],
-    text:[0.09,0.075,0.11],
-    muted:[0.38,0.35,0.39],
-    line:[0.87,0.84,0.9],
-    softPurple:[0.945,0.91,0.985],
-    softerPurple:[0.988,0.976,0.996],
-    softCyan:[0.969,0.988,0.992],
-    cyanLine:[0.843,0.941,0.957],
-    white:[1,1,1],
-    warn:[0.31,0.125,0.553]
+    purple:[0.29,0.07,0.52], purple2:[0.39,0.16,0.62],
+    cyan:[0.00,0.58,0.72], text:[0.075,0.07,0.18], muted:[0.32,0.31,0.43],
+    line:[0.84,0.83,0.91], soft:[0.975,0.968,0.992], soft2:[0.94,0.92,0.975],
+    alt:[0.975,0.973,0.988], white:[1,1,1]
   };
   const logo=await pdfLogoData();
   const pages=[]; let ops=[],y=TOP;
   const fmt=n=>Number(n).toFixed(2).replace(/\.00$/,'');
   const rgb=a=>a.map(v=>fmt(v)).join(' ');
-  const txt=(x,yy,t,size=10,bold=false,color=C.text)=>{ops.push(`BT ${rgb(color)} rg /F${bold?2:1} ${fmt(size)} Tf 1 0 0 1 ${fmt(x)} ${fmt(yy)} Tm ${pdfLiteral(t)} Tj ET\n`);};
-  const line=(x1,y1,x2,y2,w=.6,color=C.line)=>ops.push(`${rgb(color)} RG ${fmt(w)} w ${fmt(x1)} ${fmt(y1)} m ${fmt(x2)} ${fmt(y2)} l S\n`);
-  const rect=(x,yy,w,h,opt={})=>{const fill=opt.fill||null,stroke=('stroke' in opt)?opt.stroke:C.line,lineW=opt.lineW??0.8;let s='';if(fill)s+=`${rgb(fill)} rg `;if(stroke)s+=`${rgb(stroke)} RG ${fmt(lineW)} w `;s+=`${fmt(x)} ${fmt(yy)} ${fmt(w)} ${fmt(h)} re `;s+=fill&&stroke?'B':fill?'f':stroke?'S':'n';ops.push(s+'\n');};
+  const txt=(x,yy,t,size=9,bold=false,color=C.text)=>ops.push(`BT ${rgb(color)} rg /F${bold?2:1} ${fmt(size)} Tf 1 0 0 1 ${fmt(x)} ${fmt(yy)} Tm ${pdfLiteral(t)} Tj ET\n`);
+  const line=(x1,y1,x2,y2,w=.5,color=C.line)=>ops.push(`${rgb(color)} RG ${fmt(w)} w ${fmt(x1)} ${fmt(y1)} m ${fmt(x2)} ${fmt(y2)} l S\n`);
+  const rect=(x,yy,w,h,opt={})=>{const fill=opt.fill||null,stroke=('stroke'in opt)?opt.stroke:C.line,lw=opt.lineW??.7;let q='';if(fill)q+=`${rgb(fill)} rg `;if(stroke)q+=`${rgb(stroke)} RG ${fmt(lw)} w `;q+=`${fmt(x)} ${fmt(yy)} ${fmt(w)} ${fmt(h)} re ${fill&&stroke?'B':fill?'f':stroke?'S':'n'}\n`;ops.push(q);};
   const image=(name,x,yy,w,h)=>ops.push(`q ${fmt(w)} 0 0 ${fmt(h)} ${fmt(x)} ${fmt(yy)} cm /${name} Do Q\n`);
-  const pagePush=()=>{if(ops.length)pages.push(ops.join(''));ops=[];y=TOP;};
-  const ensure=(h)=>{if(y-h<BOTTOM){pagePush();header(true);}};
-  const writeWrapped=(text,x,maxChars,size=9,bold=false,leading=12,color=C.text)=>{const lines=pdfWrap(text,maxChars);ensure(lines.length*leading+2);for(const l of lines){txt(x,y,l,size,bold,color);y-=leading;}return lines.length;};
+  const pushPage=()=>{if(ops.length)pages.push(ops.join(''));ops=[];y=TOP;};
+  const moneyPdf=n=>money(n).replace(/\u00a0/g,' ');
+  const wrap=(t,n)=>pdfWrap(String(t||''),n);
   const b=db.settings,c=db.clients.find(x=>x.id===s.clientId);
+
   const header=(continued=false)=>{
-    const logoSize=64;
-    if(logo)image('Im1',M,TOP-64,logoSize,logoSize);
-    txt(M+(logo?78:0),TOP-5,'COMPROBANTE DE VENTA',15,true,C.purple);
-    txt(M+(logo?78:0),TOP-22,'CUENTA DE COBRO',9,true,C.cyan);
-    const contact=[b.address,[b.city,b.phone].filter(Boolean).join(' · '),b.email,b.social].filter(Boolean).join(' · ');
-    let cy=TOP-40;
-    for(const l of pdfWrap(contact,58)) { txt(M+(logo?78:0),cy,l,8,false,C.muted); cy-=10; }
-    const boxX=428,boxY=TOP-56,boxW=129,boxH=58;
-    rect(boxX,boxY,boxW,boxH,{fill:C.softerPurple,stroke:C.line,lineW:0.9});
-    txt(boxX+10,TOP-14,continued?'Continuación':'Comprobante',8,false,C.muted);
-    txt(boxX+10,TOP-31,s.number||'',16,true,C.purple);
-    txt(boxX+10,TOP-46,s.date||'',8,false,C.muted);
-    line(M,TOP-74,PAGE_W-M,TOP-74,2,C.purple);
-    line(M,TOP-78,PAGE_W-M,TOP-78,1.2,C.cyan);
-    y=TOP-98;
+    // Logo original, contactos y bloque de comprobante.
+    if(logo) image('Im1',M,TOP-72,86,72);
+    else { txt(M,TOP-20,b.name||'Flor Morado Muebles',18,true,C.purple); }
+    const cx=126;
+    let cy=TOP-13;
+    const contacts=[b.address,b.city,b.phone,b.email,b.social].filter(Boolean);
+    for(const v of contacts){ for(const l of wrap(v,38)){txt(cx,cy,l,7.8,false,C.text);cy-=10;} }
+    const bx=350,bw=PAGE_W-M-bx,bh=78;
+    rect(bx,TOP-bh,bw,bh,{fill:C.soft,stroke:C.line});
+    txt(bx+14,TOP-18,continued?'COMPROBANTE · CONTINUACIÓN':'COMPROBANTE',13,true,C.purple);
+    if(!continued){txt(bx+14,TOP-34,'DE VENTA',13,true,C.purple);txt(bx+14,TOP-49,'CUENTA DE COBRO',8.5,false,C.purple);}
+    rect(bx+bw-86,TOP-48,74,34,{fill:C.purple,stroke:C.purple});
+    txt(bx+bw-78,TOP-27,'Comprobante',7,false,C.white);
+    txt(bx+bw-78,TOP-42,s.number||'',13,true,C.white);
+    txt(bx+14,TOP-67,'Fecha de emisión:',7.5,true,C.text);
+    txt(bx+92,TOP-67,s.date||'',8,false,C.text);
+    y=TOP-94;
   };
+  const ensure=(need)=>{if(y-need<BOTTOM){pushPage();header(true);}};
   header(false);
 
-  const clientLines=[];
-  clientLines.push({label:'Cliente:',value:c?.name||''});
-  if(c?.phone)clientLines.push({label:'Teléfono:',value:c.phone});
-  if(c?.address)clientLines.push({label:'Dirección:',value:c.address});
-  clientLines.push({label:'Estado del pedido:',value:s.orderStatus||'Pendiente'});
-  if(s.deliveryDate)clientLines.push({label:'Fecha prometida de entrega:',value:s.deliveryDate});
-  if(s.actualDeliveryDate)clientLines.push({label:'Entregado:',value:s.actualDeliveryDate});
-  let clientHeight=14;
-  clientLines.forEach(r=>{clientHeight+=Math.max(14,pdfWrap(r.value,62).length*12);});
-  ensure(clientHeight+10);
-  rect(M,y-clientHeight,PAGE_W-2*M,clientHeight,{fill:C.softerPurple,stroke:C.line,lineW:0.8});
-  let yy=y-16;
-  clientLines.forEach(r=>{
-    txt(M+10,yy,r.label,9,true,C.text);
-    const lines=pdfWrap(r.value,62);
-    txt(M+98,yy,lines[0]||'',9,false,C.text);
-    for(let i=1;i<lines.length;i++)txt(M+98,yy-i*12,lines[i],9,false,C.text);
-    yy-=Math.max(14,lines.length*12);
-  });
-  y-=clientHeight+16;
+  // Cliente y estado, en dos tarjetas como el diseño aprobado.
+  const infoH=72,leftW=360,gap=10,rightX=M+leftW+gap,rightW=PAGE_W-M-rightX;
+  rect(M,y-infoH,leftW,infoH,{fill:C.white,stroke:C.line});
+  txt(M+12,y-17,'Datos del cliente',11,true,C.purple);
+  txt(M+12,y-35,'Nombre:',8,true); txt(M+84,y-35,c?.name||'',8.5);
+  txt(M+12,y-49,'Teléfono:',8,true); txt(M+84,y-49,c?.phone||'',8.5);
+  txt(M+12,y-63,'Dirección:',8,true); txt(M+84,y-63,c?.address||'',8.5);
+  rect(rightX,y-infoH,rightW,infoH,{fill:C.soft,stroke:C.line});
+  txt(rightX+12,y-17,'Estado del pedido',10,true,C.purple);
+  rect(rightX+12,y-57,rightW-24,28,{fill:C.soft2,stroke:null});
+  txt(rightX+25,y-47,s.orderStatus||'Pendiente',10,true,C.purple);
+  y-=infoH+16;
 
-  ensure(36);
-  rect(M,y-20,PAGE_W-2*M,20,{fill:C.softPurple,stroke:C.line,lineW:0.6});
-  txt(M+8,y-13,'Producto / descripción',10,true,C.purple);
-  txt(357,y-13,'Cant.',9,true,C.purple);
-  txt(411,y-13,'Precio',9,true,C.purple);
-  txt(504,y-13,'Total',9,true,C.purple);
-  y-=28;
+  const tableHeader=()=>{
+    txt(M,y,'Productos',12,true,C.purple); y-=8;
+    rect(M,y-23,PAGE_W-2*M,23,{fill:C.purple2,stroke:C.purple2});
+    txt(M+8,y-15,'#',8,true,C.white);
+    txt(M+31,y-15,'Producto / descripción',8,true,C.white);
+    txt(360,y-15,'Cant.',8,true,C.white);
+    txt(407,y-15,'Precio unitario',8,true,C.white);
+    txt(503,y-15,'Total',8,true,C.white);
+    y-=23;
+  };
+  tableHeader();
 
-  const tableHeader=()=>{rect(M,y-20,PAGE_W-2*M,20,{fill:C.softPurple,stroke:C.line,lineW:0.6});txt(M+8,y-13,'Producto / descripción',10,true,C.purple);txt(357,y-13,'Cant.',9,true,C.purple);txt(411,y-13,'Precio',9,true,C.purple);txt(504,y-13,'Total',9,true,C.purple);y-=28;};
-
+  let rowIndex=0;
   for(const it of (s.items||[])){
-    const desc=pdfWrap(pdfPlainItemDescription(it),50);
-    const rowH=Math.max(30,desc.length*12+12);
-    ensure(rowH+10);
-    if(pages.length>0&&y>TOP-110)tableHeader();
-    const rowBottom=y-rowH+6;
-    line(M,rowBottom,PAGE_W-M,rowBottom,0.25,C.line);
-    const yyItem=y-1;
-    desc.forEach((l,i)=>txt(M+4,yyItem-i*12,l,i===0?9.5:8.5,i===0,C.text));
-    txt(368,yyItem,String(it.qty||0),8.5,false,C.text);
-    txt(401,yyItem,money(it.price),8.5,false,C.text);
-    txt(489,yyItem,money(Number(it.qty||0)*Number(it.price||0)),8.5,false,C.text);
-    y-=rowH;
+    const p=db.products.find(x=>x.id===it.productId)||{};
+    const name=it.name||p.name||'Producto';
+    const ref=it.ref||p.ref||'';
+    const measure=it.measures||it.variantName||it.variant||p.measures||'';
+    const color=it.color||p.color||'';
+    const material=it.material||p.material||'';
+    const details=it.details||p.details||'';
+    const custom=it.customDetails||'';
+    const details1=[ref?'Ref. '+ref:'',measure?'Medida / variante: '+measure:''].filter(Boolean).join('   |   ');
+    const details2=[color?'Acabado: '+color:'',material?'Material: '+material:''].filter(Boolean).join('   |   ');
+    const extra=[details,custom?'Personalización: '+custom:''].filter(Boolean).join(' · ');
+    const descLines=[...wrap(details1,52),...wrap(details2,52),...(extra?wrap(extra,52):[])].filter(Boolean);
+    const rowH=Math.max(43,25+descLines.length*9);
+    if(y-rowH<BOTTOM+150){pushPage();header(true);tableHeader();}
+    const bottom=y-rowH;
+    if(rowIndex%2)rect(M,bottom,PAGE_W-2*M,rowH,{fill:C.alt,stroke:null});
+    line(M,bottom,PAGE_W-M,bottom,.35,C.line);
+    line(M+26,bottom,M+26,y,.3,C.line); line(350,bottom,350,y,.3,C.line);
+    line(397,bottom,397,y,.3,C.line); line(490,bottom,490,y,.3,C.line);
+    txt(M+10,y-24,String(rowIndex+1),8.5,false,C.text);
+    txt(M+36,y-16,name,9.5,true,C.text);
+    let dy=y-29; for(const l of descLines){txt(M+36,dy,l,7.2,false,C.muted);dy-=9;}
+    txt(367,y-24,String(it.qty||0),8.5,true,C.text);
+    txt(407,y-24,moneyPdf(it.price),8.2,false,C.text);
+    txt(500,y-24,moneyPdf(Number(it.qty||0)*Number(it.price||0)),8.5,true,C.text);
+    y=bottom; rowIndex++;
   }
-  y-=8;
+  y-=14;
 
-  const totalsTop=y; const totalsX=346, totalsW=PAGE_W-M-totalsX;
-  ensure(118);
-  line(totalsX,totalsTop, PAGE_W-M, totalsTop, 2.2, C.cyan);
-  const totalLine=(label,val,bold=false)=>{txt(totalsX,y,label,9,bold,bold?C.purple:C.text);txt(481,y,val,9,bold,bold?C.purple:C.text);y-=14;};
-  totalLine('Subtotal',money(s.subtotal));
-  totalLine('Transporte',money(s.shipping));
-  totalLine('Descuento','-'+money(s.discount));
-  totalLine('TOTAL',money(s.total),true);
-  totalLine('Abonado',money(s.deposit));
-  totalLine('SALDO PENDIENTE',money(s.balance),true);
-  y-=4;
-
-  const payRows=s.payments||[];
-  let payHeight=34+(payRows.length?payRows.reduce((a,p,i)=>a+Math.max(16,pdfWrap(`${i+1}. ${p.date||''}${p.method?' · '+p.method:''}${(p.accountName||p.account)?' · Cuenta: '+(p.accountName||p.account):''}${p.note?' · '+p.note:''} — ${money(p.amount)}`,90).length*11),0):14);
-  ensure(payHeight+10);
-  rect(M,y-payHeight,PAGE_W-2*M,payHeight,{fill:C.softCyan,stroke:C.cyanLine,lineW:0.8});
-  txt(M+12,y-16,'Abonos registrados',10,true,C.cyan);
-  let py=y-32;
-  if(!payRows.length){txt(M+12,py,'Sin abonos registrados.',8.5,false,C.muted);py-=12;}
-  else for(const [i,p] of payRows.entries()){
-    const lines=pdfWrap(`${i+1}. ${p.date||''}${p.method?' · '+p.method:''}${(p.accountName||p.account)?' · Cuenta: '+(p.accountName||p.account):''}${p.note?' · '+p.note:''} — ${money(p.amount)}`,90);
-    lines.forEach((l,idx)=>txt(M+12,py-idx*11,l,8.5,false,C.text));
-    py-=Math.max(15,lines.length*11+2);
-    line(M+12,py+4,PAGE_W-M-12,py+4,0.25,C.cyanLine);
+  // Abonos a la izquierda y resumen a la derecha.
+  const pays=s.payments||[];
+  const leftX=M,leftBoxW=324,rightBoxX=leftX+leftBoxW+12,rightBoxW=PAGE_W-M-rightBoxX;
+  const payH=Math.max(102,48+(pays.length||1)*22);
+  const summaryH=126,blockH=Math.max(payH,summaryH);
+  ensure(blockH+82);
+  rect(leftX,y-blockH,leftBoxW,blockH,{fill:C.white,stroke:C.line});
+  txt(leftX+12,y-17,'Abonos registrados',10.5,true,C.purple);
+  rect(leftX,y-42,leftBoxW,20,{fill:C.soft2,stroke:null});
+  txt(leftX+10,y-35,'Fecha',7,true,C.purple);txt(leftX+84,y-35,'Forma de pago',7,true,C.purple);
+  txt(leftX+178,y-35,'Cuenta',7,true,C.purple);txt(leftX+260,y-35,'Valor',7,true,C.purple);
+  let py=y-59;
+  if(!pays.length)txt(leftX+12,py,'Sin abonos registrados.',8,false,C.muted);
+  else for(const p of pays){
+    const account=p.accountName||p.account||p.method||'';
+    txt(leftX+10,py,p.date||'',7.2); txt(leftX+84,py,p.method||'',7.2);
+    txt(leftX+178,py,account,7.2); txt(leftX+260,py,moneyPdf(p.amount),7.2,true);
+    line(leftX+8,py-7,leftX+leftBoxW-8,py-7,.25,C.line);py-=22;
   }
-  y-=payHeight+14;
 
-  ensure(70);
-    if(s.notes){
-    txt(M,y,'Observaciones:',9,true,C.text); y-=12;
-    writeWrapped(s.notes,M,92,8.5,false,11,C.text);
-    y-=4;
-  }
-  line(M,y,PAGE_W-M,y,0.7,C.line); y-=12;
-  if(b.footer){writeWrapped(b.footer,M,92,8,false,10,C.muted);}
-  writeWrapped('Documento interno de venta. No constituye factura electrónica.',M,92,7.5,false,9,C.muted);
+  rect(rightBoxX,y-summaryH,rightBoxW,summaryH,{fill:C.white,stroke:C.line});
+  txt(rightBoxX+12,y-17,'Resumen de la cuenta',10.5,true,C.purple);
+  let sy=y-37;
+  const sumLine=(lab,val,bold=false)=>{txt(rightBoxX+12,sy,lab,8,bold);txt(rightBoxX+112,sy,val,8,bold);sy-=16;};
+  sumLine('Subtotal',moneyPdf(s.subtotal));sumLine('Transporte',moneyPdf(s.shipping));
+  sumLine('Descuento','- '+moneyPdf(s.discount));
+  rect(rightBoxX+8,sy-5,rightBoxW-16,21,{fill:C.soft2,stroke:null});sumLine('TOTAL',moneyPdf(s.total),true);
+  sumLine('Abonado',moneyPdf(s.deposit));
+  rect(rightBoxX+8,sy-6,rightBoxW-16,23,{fill:C.purple,stroke:C.purple});
+  txt(rightBoxX+14,sy+1,'SALDO PENDIENTE',8.2,true,C.white);
+  txt(rightBoxX+112,sy+1,moneyPdf(s.balance),9.2,true,C.white);
+  y-=blockH+12;
+
+  // Observaciones.
+  const noteLines=s.notes?wrap(s.notes,100):[''];
+  const obsH=Math.max(44,28+noteLines.length*10);
+  ensure(obsH+45);
+  rect(M,y-obsH,PAGE_W-2*M,obsH,{fill:C.soft,stroke:C.line});
+  txt(M+12,y-17,'Observaciones',10,true,C.purple);
+  let ny=y-32;for(const l of noteLines){txt(M+12,ny,l,7.5,false,C.text);ny-=10;}
+  y-=obsH+13;
+  txt(M,y,'Gracias por su compra.',10,true,C.purple);
+  txt(PAGE_W-M-205,y,'Documento interno de venta.',7,false,C.muted);
+  txt(PAGE_W-M-205,y-10,'No constituye factura electrónica.',7,false,C.muted);
+
   if(ops.length)pages.push(ops.join(''));
 
-  const objects=[]; const add=o=>{objects.push(o);return objects.length;};
-  const catalogId=add([]); const pagesId=add([]);
+  // Ensamblado PDF.
+  const objects=[];const add=o=>{objects.push(o);return objects.length;};
+  const catalogId=add([]),pagesId=add([]);
   const fontId=add([pdfAscii('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>')]);
   const boldId=add([pdfAscii('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>')]);
   let imageId=null;
   if(logo&&logo.bytes?.length){
-    const head=pdfAscii(`<< /Type /XObject /Subtype /Image /Width ${logo.width} /Height ${logo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${logo.bytes.length} >>\nstream\n`);
-    const tail=pdfAscii('\nendstream');
-    imageId=add([head,logo.bytes,tail]);
+    imageId=add([pdfAscii(`<< /Type /XObject /Subtype /Image /Width ${logo.width} /Height ${logo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${logo.bytes.length} >>\nstream\n`),logo.bytes,pdfAscii('\nendstream')]);
   }
   const pageIds=[];
   for(const stream of pages){
     const contentId=add([pdfAscii(`<< /Length ${stream.length} >>\nstream\n${stream}endstream`)]);
     const res=`<< /Font << /F1 ${fontId} 0 R /F2 ${boldId} 0 R >>${imageId?` /XObject << /Im1 ${imageId} 0 R >>`:''} >>`;
-    const pageId=add([pdfAscii(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${fmt(PAGE_W)} ${fmt(PAGE_H)}] /Resources ${res} /Contents ${contentId} 0 R >>`)]);
-    pageIds.push(pageId);
+    pageIds.push(add([pdfAscii(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources ${res} /Contents ${contentId} 0 R >>`)]));
   }
   objects[catalogId-1]=[pdfAscii(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`)];
   objects[pagesId-1]=[pdfAscii(`<< /Type /Pages /Count ${pageIds.length} /Kids [${pageIds.map(x=>x+' 0 R').join(' ')}] >>`)];
-
-  const chunks=[pdfAscii('%PDF-1.4\n%FM-PDF\n')];
-  const offsets=[0]; let offset=chunks[0].length;
-  for(let i=0;i<objects.length;i++){
-    const start=pdfAscii(`${i+1} 0 obj\n`), end=pdfAscii('\nendobj\n');
-    offsets.push(offset);
-    chunks.push(start,...objects[i],end);
-    offset+=start.length+objects[i].reduce((a,p)=>a+p.length,0)+end.length;
-  }
-  const xrefOffset=offset;
-  let xref=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;
+  const chunks=[pdfAscii('%PDF-1.4\n%FM-1.5.6\n')],offsets=[0];let offset=chunks[0].length;
+  for(let i=0;i<objects.length;i++){offsets.push(offset);const a=pdfAscii(`${i+1} 0 obj\n`),z=pdfAscii('\nendobj\n');chunks.push(a,...objects[i],z);offset+=a.length+objects[i].reduce((n,p)=>n+p.length,0)+z.length;}
+  const xrefOffset=offset;let xref=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;
   for(let i=1;i<offsets.length;i++)xref+=String(offsets[i]).padStart(10,'0')+' 00000 n \n';
-  const trailer=`trailer\n<< /Size ${objects.length+1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-  chunks.push(pdfAscii(xref),pdfAscii(trailer));
+  chunks.push(pdfAscii(xref),pdfAscii(`trailer\n<< /Size ${objects.length+1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`));
   return new Blob(chunks,{type:'application/pdf'});
 }
-
 async function receiptImageAsDataUrl(src){
   try{
     const r=await fetch(src); const b=await r.blob();
