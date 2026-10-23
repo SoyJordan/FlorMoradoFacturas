@@ -30,7 +30,9 @@ for(const a of db.finance.accounts){
   a.type=FIN_TYPE_ALIASES[raw.toLowerCase()]||raw.toLowerCase();
   if(FIN_LIABILITY_TYPES.includes(a.type)&&Number(a.opening||0)<0)a.opening=Math.abs(Number(a.opening||0));
 }
-for(const p of db.products){if(p.minStock===undefined)p.minStock=1;}
+// v1.5.10: Flor Morado fabrica por pedido; no se maneja stock.
+for(const p of db.products){delete p.stock;delete p.minStock;}
+for(const s of db.sales){delete s.stockRestoredOnCancel;}
 for(const s of db.sales){
   if(!s.orderStatus)s.orderStatus='Pendiente';
   if(s.deliveryDate===undefined)s.deliveryDate='';
@@ -179,7 +181,6 @@ function renderProducts(){
  $('#productList').innerHTML=db.products.length?db.products.map(p=>`<div class="row"><div><strong>${esc(p.name)}</strong><div class="meta">${esc(p.ref||'Sin ref.')} · ${esc(p.category||'Sin categoría')}${productExtra(p)?'<br>'+esc(productExtra(p)):''}${p.details?'<br>'+esc(p.details):''}</div></div><div class="right"><strong>${money(p.price)}</strong><div class="meta">Costo ${money(p.cost)}</div><div class="row-actions"><button class="secondary" onclick="editProduct('${p.id}')">Editar</button></div></div></div>`).join(''):'<p class="muted">Todavía no hay productos.</p>';
  refreshSaleItemSelects();
 }
-window.adjustStock=x=>{const p=db.products.find(z=>z.id===x);const n=prompt(`Nuevo stock para ${p.name}:`,p.stock);if(n!==null&&!isNaN(n)){p.stock=Number(n);save();}};
 function variantsToText(v){return (Array.isArray(v)?v:[]).map(x=>`${x.label} | ${Number(x.cost||0)} | ${Number(x.price||0)}`).join('\n');}
 function parseVariantsText(text){return String(text||'').split(/\n+/).map(x=>x.trim()).filter(Boolean).map(line=>{
   const parts=line.split('|').map(x=>x.trim());
@@ -203,7 +204,21 @@ function refreshSaleItemSelects(){ $$('.item-prod').forEach(s=>{const cur=s.valu
 function getSaleDraft(){const items=$$('.sale-item-card').map(card=>{const r=card.querySelector('.sale-item'),productId=r.querySelector('.item-prod').value,p=db.products.find(x=>x.id===productId);const vi=card.querySelector('.item-variant')?.value??'';const vv=vi!==''?(p?.variants||[])[Number(vi)]:null;return{productId,variantIndex:vi===''?undefined:Number(vi),variantLabel:vv?.label||'',qty:Number(r.querySelector('.item-qty').value||0),price:Number(r.querySelector('.item-price').value||0),customDetails:card.querySelector('.item-custom').value.trim(),name:p?.name||'',ref:p?.ref||'',measures:card.querySelector('.item-measures').value.trim()||vv?.label||p?.measures||'',color:card.querySelector('.item-color').value.trim()||p?.color||'',material:card.querySelector('.item-material').value.trim()||p?.material||'',details:p?.details||'',cost:Number(vv?.cost ?? p?.cost ?? 0)}}).filter(x=>x.productId&&x.qty>0);const subtotal=items.reduce((a,x)=>a+x.qty*x.price,0);const shipping=Number($('#saleShipping').value||0),discount=Number($('#saleDiscount').value||0),deposit=Number($('#saleDeposit').value||0),shippingExpense=Number($('#saleShippingExpense').value||0),otherExpenses=Number($('#saleOtherExpenses').value||0);const total=Math.max(0,subtotal+shipping-discount),balance=Math.max(0,total-deposit),cogs=items.reduce((a,x)=>a+Number(x.cost||0)*x.qty,0),profit=total-cogs-shippingExpense-otherExpenses;return{items,subtotal,shipping,discount,deposit,total,balance,shippingExpense,otherExpenses,profit};}
 function calcSale(){const s=getSaleDraft();$('#saleSubtotal').textContent=money(s.subtotal);$('#saleTotal').textContent=money(s.total);$('#saleBalance').textContent=money(s.balance);$('#saleProfit').textContent=money(s.profit);}['saleShipping','saleDiscount','saleDeposit','saleShippingExpense','saleOtherExpenses'].forEach(x=>$('#'+x).addEventListener('input',calcSale));
 
-$('#saveSale').onclick=()=>{const client=db.clients.find(c=>c.id===$('#saleClient').value);if(!client)return alert('Selecciona un cliente.');const d=getSaleDraft();if(!d.items.length)return alert('Agrega al menos un producto.');const old=editingSaleId?db.sales.find(s=>s.id===editingSaleId):null;if(old&&old.orderStatus==='Cancelada')return alert('No se puede editar una factura cancelada.');for(const it of d.items){const p=db.products.find(x=>x.id===it.productId);const oldQty=old?(old.items||[]).filter(z=>z.productId===it.productId).reduce((a,z)=>a+Number(z.qty||0),0):0;const available=Number(p?.stock||0)+oldQty;if(p&&available<it.qty&&!confirm(`${p.name} tiene stock disponible ajustado de ${available} y estás vendiendo ${it.qty}. ¿Continuar?`))return;}if(old){const oldQty={},newQty={};for(const it of old.items||[])oldQty[it.productId]=(oldQty[it.productId]||0)+Number(it.qty||0);for(const it of d.items)newQty[it.productId]=(newQty[it.productId]||0)+Number(it.qty||0);for(const pid of new Set([...Object.keys(oldQty),...Object.keys(newQty)])){const p=db.products.find(x=>x.id===pid);if(p)p.stock=Number(p.stock||0)+Number(oldQty[pid]||0)-Number(newQty[pid]||0);}Object.assign(old,{clientId:client.id,date:$('#saleDate').value||old.date,deliveryDate:$('#saleDeliveryDate').value||'',actualDeliveryDate:$('#saleOrderStatus').value==='Entregada'?(old.actualDeliveryDate||today()):'',orderStatus:$('#saleOrderStatus').value||old.orderStatus,notes:$('#saleNotes').value.trim(),...d});old.deposit=(old.payments||[]).reduce((a,p)=>a+Number(p.amount||0),0);old.balance=Math.max(0,Number(old.total||0)-old.deposit);old.editHistory=old.editHistory||[];old.editHistory.push({date:nowStamp(),note:'Factura editada'});editingSaleId=null;$('#saveSale').textContent='Guardar venta y generar comprobante';$('#saleDeposit').disabled=false;save();resetSale();renderReceipt(old);return;}for(const it of d.items){const p=db.products.find(x=>x.id===it.productId);if(p&&Number(p.stock)<it.qty&&!confirm(`${p.name} tiene stock ${p.stock} y estás vendiendo ${it.qty}. ¿Continuar?`))return;}let paymentAccount=null;if(d.deposit>0){paymentAccount=db.finance.accounts.find(a=>a.id===$('#salePayment').value&&FIN_LIQUID_TYPES.includes(a.type));if(!paymentAccount)return alert('Selecciona la cuenta de Finanzas donde ingresó el abono inicial.');}const number='FM-'+String(db.seq).padStart(4,'0');const sale={id:id(),number,date:$('#saleDate').value||today(),time:colombiaTime(),createdAt:nowStamp(),deliveryDate:$('#saleDeliveryDate').value||'',actualDeliveryDate:$('#saleOrderStatus').value==='Entregada'?today():'',orderStatus:$('#saleOrderStatus').value||'Pendiente',clientId:client.id,payment:paymentAccount?.name||'',notes:$('#saleNotes').value.trim(),...d,payments:d.deposit?[{id:id(),date:$('#saleDate').value||today(),time:colombiaTime(),createdAt:nowStamp(),amount:d.deposit,method:paymentAccount.name,accountId:paymentAccount.id,note:'Abono inicial'}]:[]};db.seq++;db.sales.push(sale);for(const it of d.items){const p=db.products.find(x=>x.id===it.productId);if(p)p.stock-=it.qty;}for(const p of sale.payments)createSaleFinanceIncome(sale,p);save();renderReceipt(sale);resetSale();};
+$('#saveSale').onclick=()=>{
+ const client=db.clients.find(c=>c.id===$('#saleClient').value);if(!client)return alert('Selecciona un cliente.');
+ const d=getSaleDraft();if(!d.items.length)return alert('Agrega al menos un producto.');
+ const old=editingSaleId?db.sales.find(s=>s.id===editingSaleId):null;if(old&&old.orderStatus==='Cancelada')return alert('No se puede editar una factura cancelada.');
+ if(old){
+   Object.assign(old,{clientId:client.id,date:$('#saleDate').value||old.date,deliveryDate:$('#saleDeliveryDate').value||'',actualDeliveryDate:$('#saleOrderStatus').value==='Entregada'?(old.actualDeliveryDate||today()):'',orderStatus:$('#saleOrderStatus').value||old.orderStatus,notes:$('#saleNotes').value.trim(),...d});
+   old.deposit=(old.payments||[]).reduce((a,p)=>a+Number(p.amount||0),0);old.balance=Math.max(0,Number(old.total||0)-old.deposit);
+   old.editHistory=old.editHistory||[];old.editHistory.push({date:nowStamp(),note:'Factura editada'});
+   editingSaleId=null;$('#saveSale').textContent='Guardar venta y generar comprobante';$('#saleDeposit').disabled=false;save();resetSale();renderReceipt(old);return;
+ }
+ let paymentAccount=null;if(d.deposit>0){paymentAccount=db.finance.accounts.find(a=>a.id===$('#salePayment').value&&FIN_LIQUID_TYPES.includes(a.type));if(!paymentAccount)return alert('Selecciona la cuenta de Finanzas donde ingresó el abono inicial.');}
+ const number='FM-'+String(db.seq).padStart(4,'0');
+ const sale={id:id(),number,date:$('#saleDate').value||today(),time:colombiaTime(),createdAt:nowStamp(),deliveryDate:$('#saleDeliveryDate').value||'',actualDeliveryDate:$('#saleOrderStatus').value==='Entregada'?today():'',orderStatus:$('#saleOrderStatus').value||'Pendiente',clientId:client.id,payment:paymentAccount?.name||'',notes:$('#saleNotes').value.trim(),...d,payments:d.deposit?[{id:id(),date:$('#saleDate').value||today(),time:colombiaTime(),createdAt:nowStamp(),amount:d.deposit,method:paymentAccount.name,accountId:paymentAccount.id,note:'Abono inicial'}]:[]};
+ db.seq++;db.sales.push(sale);for(const p of sale.payments)createSaleFinanceIncome(sale,p);save();renderReceipt(sale);resetSale();
+};
 function resetSale(){editingSaleId=null;$('#saveSale').textContent='Guardar venta y generar comprobante';$('#saleDeposit').disabled=false;$('#saleClient').value='';$('#saleDate').value=today();$('#saleDeliveryDate').value='';$('#saleOrderStatus').value='Pendiente';$('#saleShipping').value=0;$('#saleDiscount').value=0;$('#saleDeposit').value=0;$('#saleShippingExpense').value=0;$('#saleOtherExpenses').value=0;$('#saleNotes').value='';$('#saleItems').innerHTML='';refreshSalePaymentOptions();addSaleItem();calcSale();}
 
 function registerPayment(saleId){const s=db.sales.find(z=>z.id===saleId);if(!s||s.orderStatus==='Cancelada')return alert('No se pueden registrar abonos en una venta cancelada.');if(s.balance<=0)return;const raw=prompt(`Saldo actual ${money(s.balance)}.\nValor del abono:`);if(raw===null)return;const a=Number(String(raw).replace(/[^0-9.-]/g,''));if(!a||a<=0)return alert('Ingresa un valor válido.');if(a>s.balance&&!confirm(`El abono supera el saldo por ${money(a-s.balance)}. ¿Registrarlo de todas formas?`))return;const account=saleAccountPrompt();if(!account)return;const date=prompt('Fecha del abono (AAAA-MM-DD):',today())||today();const note=prompt('Nota del abono (opcional):','')||'';s.payments=s.payments||[];const payment={id:id(),date,time:colombiaTime(),createdAt:nowStamp(),amount:a,method:account.name,accountId:account.id,note};s.payments.push(payment);s.deposit=(s.payments||[]).reduce((sum,p)=>sum+Number(p.amount||0),0);s.balance=Math.max(0,s.total-s.deposit);createSaleFinanceIncome(s,payment);save();if(!$('#modal').classList.contains('hidden'))renderReceipt(s);}
@@ -212,14 +227,22 @@ function paymentStatus(s){if(Number(s.balance||0)<=0)return 'Pagada';if(Number(s
 function renderReceivables(){const due=activeSales().filter(s=>s.balance>0);$('#receivableList').innerHTML=due.length?due.map(s=>{const c=db.clients.find(x=>x.id===s.clientId);return `<div class="row"><div><strong>${esc(c?.name||'Cliente')}</strong><div class="meta">${s.number} · ${s.date}${s.deliveryDate?` · Entrega ${esc(s.deliveryDate)}`:''} · Total ${money(s.total)}</div></div><div class="right"><strong>${money(s.balance)}</strong><div class="row-actions"><button onclick="addPayment('${s.id}')">Registrar abono</button><button class="secondary" onclick="openSale('${s.id}')">Ver</button><button class="secondary" onclick="editSale('${s.id}')">Editar</button></div></div></div>`}).join(''):'<p class="muted">No hay saldos pendientes.</p>';}
 
 const ORDER_STATUSES=['Pendiente','En producción','Listo para entregar','Entregada','Cancelada'];
-function setOrderStatus(saleId){const s=db.sales.find(z=>z.id===saleId);if(!s)return;const menu=ORDER_STATUSES.map((x,i)=>`${i+1}. ${x}`).join('\n');const raw=prompt(`Estado actual: ${s.orderStatus||'Pendiente'}\n\n${menu}\n\nEscribe el número del nuevo estado:`);if(raw===null)return;const next=ORDER_STATUSES[Number(raw)-1];if(!next)return alert('Opción no válida.');if(next==='Cancelada'&&s.orderStatus!=='Cancelada'){if(!confirm('Al cancelar la venta, dejará de contar en ventas/cartera y las unidades se devolverán al inventario. Los abonos ya recibidos se conservarán en el historial de caja. ¿Continuar?'))return;for(const it of s.items||[]){const p=db.products.find(x=>x.id===it.productId);if(p)p.stock=Number(p.stock||0)+Number(it.qty||0);}s.stockRestoredOnCancel=true;}
- if(s.orderStatus==='Cancelada'&&next!=='Cancelada'&&s.stockRestoredOnCancel){for(const it of s.items||[]){const p=db.products.find(x=>x.id===it.productId);if(p)p.stock=Number(p.stock||0)-Number(it.qty||0);}s.stockRestoredOnCancel=false;}
- s.orderStatus=next;if(next==='Entregada'&&!s.actualDeliveryDate)s.actualDeliveryDate=today();if(next!=='Entregada')s.actualDeliveryDate='';save();if(currentReceiptSaleId===saleId)renderReceipt(s);}
+function setOrderStatus(saleId){
+ const s=db.sales.find(z=>z.id===saleId);if(!s)return;const menu=ORDER_STATUSES.map((x,i)=>`${i+1}. ${x}`).join('\n');
+ const raw=prompt(`Estado actual: ${s.orderStatus||'Pendiente'}\n\n${menu}\n\nEscribe el número del nuevo estado:`);if(raw===null)return;
+ const next=ORDER_STATUSES[Number(raw)-1];if(!next)return alert('Opción no válida.');
+ if(next==='Cancelada'&&s.orderStatus!=='Cancelada'&&!confirm('Al cancelar la venta, dejará de contar en ventas y cartera. Los abonos ya recibidos se conservarán en el historial. ¿Continuar?'))return;
+ s.orderStatus=next;if(next==='Entregada'&&!s.actualDeliveryDate)s.actualDeliveryDate=today();if(next!=='Entregada')s.actualDeliveryDate='';save();if(currentReceiptSaleId===saleId)renderReceipt(s);
+}
 window.changeSaleStatus=setOrderStatus;
 
 function renderHistory(){const q=$('#historySearch').value.toLowerCase(),status=$('#historyStatus').value;const arr=[...db.sales].reverse().filter(s=>{const c=db.clients.find(x=>x.id===s.clientId);return (!q||s.number.toLowerCase().includes(q)||(c?.name||'').toLowerCase().includes(q))&&(!status||s.orderStatus===status)});$('#historyList').innerHTML=arr.length?arr.map(s=>{const c=db.clients.find(x=>x.id===s.clientId),ps=paymentStatus(s);return `<div class="row"><div><strong>${s.number} · ${esc(c?.name||'Cliente')}</strong><div class="meta">${s.date}${s.deliveryDate?` · Entrega ${esc(s.deliveryDate)}`:''} · ${money(s.total)}</div><div class="badge-row"><span class="badge order ${statusClass(s.orderStatus)}">${esc(s.orderStatus||'Pendiente')}</span><span class="badge ${ps==='Pagada'?'paid':ps==='Abonada'?'partial':'debt'}">${ps}${s.balance>0?' · '+money(s.balance):''}</span></div></div><div class="right"><div class="meta">Utilidad ${money(saleProfit(s))}</div><div class="row-actions">${s.balance>0&&s.orderStatus!=='Cancelada'?`<button onclick="addPayment('${s.id}')">+ Abono</button>`:''}<button class="secondary" onclick="changeSaleStatus('${s.id}')">Estado</button><button class="secondary" onclick="openSale('${s.id}')">Ver</button><button class="secondary" onclick="editSale('${s.id}')">Editar</button><button class="danger-btn" onclick="deleteSale('${s.id}')">Eliminar</button></div></div></div>`}).join(''):'<p class="muted">No hay ventas.</p>';}
 function statusClass(s){return s==='Entregada'?'delivered':s==='Cancelada'?'cancelled':s==='Listo para entregar'?'ready':s==='En producción'?'production':'pending';}
-function deleteSale(saleId){const s=db.sales.find(z=>z.id===saleId);if(!s)return;const c=db.clients.find(x=>x.id===s.clientId);const ok=confirm(`¿Eliminar definitivamente ${s.number}${c?.name?' de '+c.name:''}?\n\nSe eliminarán también sus abonos y el saldo pendiente. Las unidades vendidas se devolverán al inventario si todavía no fueron devueltas por una cancelación.\n\nEsta acción no se puede deshacer.`);if(!ok)return;if(!s.stockRestoredOnCancel){for(const it of (s.items||[])){const p=db.products.find(x=>x.id===it.productId);if(p)p.stock=Number(p.stock||0)+Number(it.qty||0);}}db.sales=db.sales.filter(z=>z.id!==saleId);if(currentReceiptSaleId===saleId){$('#modal').classList.add('hidden');currentReceiptSaleId=null;}save();}
+function deleteSale(saleId){
+ const s=db.sales.find(z=>z.id===saleId);if(!s)return;const c=db.clients.find(x=>x.id===s.clientId);
+ if(!confirm(`¿Eliminar definitivamente ${s.number}${c?.name?' de '+c.name:''}?\n\nSe eliminarán también sus abonos y el saldo pendiente.\n\nEsta acción no se puede deshacer.`))return;
+ db.sales=db.sales.filter(z=>z.id!==saleId);if(currentReceiptSaleId===saleId){$('#modal').classList.add('hidden');currentReceiptSaleId=null;}save();
+}
 window.deleteSale=deleteSale;
 $('#historySearch').addEventListener('input',renderHistory);$('#historyStatus').addEventListener('change',renderHistory);window.openSale=x=>renderReceipt(db.sales.find(s=>s.id===x));
 function editSale(saleId){const s=db.sales.find(x=>x.id===saleId);if(!s)return;if(s.orderStatus==='Cancelada')return alert('No se puede editar una factura cancelada.');editingSaleId=s.id;$('#modal').classList.add('hidden');$('#saleClient').value=s.clientId;$('#saleDate').value=s.date||today();$('#saleDeliveryDate').value=s.deliveryDate||'';$('#saleOrderStatus').value=s.orderStatus||'Pendiente';$('#saleShipping').value=s.shipping||0;$('#saleDiscount').value=s.discount||0;$('#saleDeposit').value=s.deposit||0;$('#saleDeposit').disabled=true;$('#saleShippingExpense').value=s.shippingExpense||0;$('#saleOtherExpenses').value=s.otherExpenses||0;$('#saleNotes').value=s.notes||'';refreshSalePaymentOptions();$('#saleItems').innerHTML='';(s.items||[]).forEach(it=>addSaleItem(it));if(!(s.items||[]).length)addSaleItem();$('#saveSale').textContent='Guardar cambios de la factura '+s.number;calcSale();show('sale');}
@@ -227,7 +250,7 @@ window.editSale=editSale;$('#editReceipt').onclick=()=>{if(currentReceiptSaleId)
 
 function receiptContact(){const b=db.settings;return [b.address,[b.city,b.phone].filter(Boolean).join(' · '),b.email,b.social].filter(Boolean).map(esc).join('<br>')}
 function itemDescription(it){const p=db.products.find(x=>x.id===it.productId)||{};const d={name:it.name||p.name||'Producto',ref:it.ref||p.ref||'',measures:it.measures||p.measures||'',color:it.color||p.color||'',material:it.material||p.material||'',details:it.details||p.details||'',customDetails:it.customDetails||''};const extra=[d.ref?`Ref. ${d.ref}`:'',d.measures?`Medida / variante: ${d.measures}`:'',d.color?`Acabado: ${d.color}`:'',d.material?`Material: ${d.material}`:'',d.details].filter(Boolean).map(esc).join(' · ');return `<strong>${esc(d.name)}</strong>${extra?`<span class="item-detail">${extra}</span>`:''}${d.customDetails?`<span class="item-custom-print"><b>Personalización:</b> ${esc(d.customDetails)}</span>`:''}`;}
-function renderReceipt(s){if(!s)return;currentReceiptSaleId=s.id;const c=db.clients.find(x=>x.id===s.clientId);const rows=s.items.map((it,i)=>`<tr><td class="receipt-index">${i+1}</td><td>${itemDescription(it)}</td><td>${it.qty}</td><td>${money(it.price)}</td><td>${money(it.qty*it.price)}</td></tr>`).join('');const pays=(s.payments||[]);const payRows=pays.length?pays.map((p,i)=>`<tr><td>${i+1}</td><td>${esc(p.date||'')}</td><td>${esc(p.method||'')}</td><td>${esc(p.method||'')}</td><td><strong>${money(p.amount)}</strong></td></tr>`).join(''):`<tr><td colspan="5" class="empty-payment">Sin abonos registrados.</td></tr>`;const b=db.settings;$('#receipt').innerHTML=`<div class="receipt professional-receipt"><div class="receipt-head"><div class="receipt-logo-block"><img src="assets/logo-flor-morado.jpg" class="receipt-logo" alt="Logo"></div><div class="receipt-contact">${receiptContact()}</div><div class="receipt-number"><div class="receipt-title">COMPROBANTE<br>DE VENTA</div><div class="receipt-subtitle">CUENTA DE COBRO</div><span>Comprobante</span><strong>${esc(s.number)}</strong><div class="receipt-date"><b>Fecha de emisión:</b> ${esc(s.date)}</div></div></div><div class="receipt-info-grid"><div class="client-box"><h4>Datos del cliente</h4><div><b>Nombre:</b> ${esc(c?.name||'')}</div>${c?.phone?`<div><b>Teléfono:</b> ${esc(c.phone)}</div>`:''}${c?.address?`<div><b>Dirección:</b> ${esc(c.address)}</div>`:''}</div><div class="status-box"><h4>Estado del pedido</h4><strong>${esc(s.orderStatus||'Pendiente')}</strong>${s.deliveryDate?`<small>Entrega prevista: ${esc(s.deliveryDate)}</small>`:''}${s.actualDeliveryDate?`<small>Entregado: ${esc(s.actualDeliveryDate)}</small>`:''}</div></div><h3 class="receipt-section-title">Productos</h3><table class="receipt-table"><thead><tr><th>#</th><th>Producto / descripción</th><th>Cant.</th><th>Precio unitario</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><div class="receipt-bottom-grid"><div class="payments-box"><h4>Abonos registrados</h4><table class="payments-table"><thead><tr><th>#</th><th>Fecha</th><th>Forma de pago</th><th>Cuenta</th><th>Valor</th></tr></thead><tbody>${payRows}</tbody></table></div><div class="receipt-total"><h4>Resumen de la cuenta</h4><div><span>Subtotal</span><strong>${money(s.subtotal)}</strong></div><div><span>Transporte</span><strong>${money(s.shipping)}</strong></div><div><span>Descuento</span><strong>-${money(s.discount)}</strong></div><div class="grand"><span>TOTAL</span><strong>${money(s.total)}</strong></div><div><span>Abonado</span><strong>${money(s.deposit)}</strong></div><div class="balance"><span>SALDO PENDIENTE</span><strong>${money(s.balance)}</strong></div></div></div><div class="observations-box"><h4>Observaciones</h4><div>${s.notes?esc(s.notes):'&nbsp;'}</div></div><div class="receipt-footer"><strong>${esc(b.footer||'Gracias por su compra.')}</strong><span>Documento interno de venta.<br>No constituye factura electrónica.</span></div></div>`;$('#paymentFromReceipt').classList.toggle('hidden',!(s.balance>0&&s.orderStatus!=='Cancelada'));$('#modal').classList.remove('hidden');}
+function renderReceipt(s){if(!s)return;currentReceiptSaleId=s.id;const c=db.clients.find(x=>x.id===s.clientId);const rows=s.items.map((it,i)=>`<tr><td class="receipt-index">${i+1}</td><td>${itemDescription(it)}</td><td>${it.qty}</td><td>${money(it.price)}</td><td>${money(it.qty*it.price)}</td></tr>`).join('');const pays=(s.payments||[]);const payRows=pays.length?pays.map((p,i)=>`<tr><td>${i+1}</td><td>${esc(p.date||'')}</td><td>${esc(p.method||'')}</td><td>${esc(p.method||'')}</td><td><strong>${money(p.amount)}</strong></td></tr>`).join(''):`<tr><td colspan="5" class="empty-payment">Sin abonos registrados.</td></tr>`;const b=db.settings;$('#receipt').innerHTML=`<div class="receipt professional-receipt"><div class="receipt-head"><div class="receipt-logo-block"><img src="assets/logo-flor-morado.png" class="receipt-logo" alt="Logo"></div><div class="receipt-contact">${receiptContact()}</div><div class="receipt-number"><div class="receipt-title">COMPROBANTE<br>DE VENTA</div><div class="receipt-subtitle">CUENTA DE COBRO</div><span>Comprobante</span><strong>${esc(s.number)}</strong><div class="receipt-date"><b>Fecha de emisión:</b> ${esc(s.date)}</div></div></div><div class="receipt-info-grid"><div class="client-box"><h4>Datos del cliente</h4><div><b>Nombre:</b> ${esc(c?.name||'')}</div>${c?.phone?`<div><b>Teléfono:</b> ${esc(c.phone)}</div>`:''}${c?.address?`<div><b>Dirección:</b> ${esc(c.address)}</div>`:''}</div><div class="status-box"><h4>Estado del pedido</h4><strong>${esc(s.orderStatus||'Pendiente')}</strong>${s.deliveryDate?`<small>Entrega prevista: ${esc(s.deliveryDate)}</small>`:''}${s.actualDeliveryDate?`<small>Entregado: ${esc(s.actualDeliveryDate)}</small>`:''}</div></div><h3 class="receipt-section-title">Productos</h3><table class="receipt-table"><thead><tr><th>#</th><th>Producto / descripción</th><th>Cant.</th><th>Precio unitario</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><div class="receipt-bottom-grid"><div class="payments-box"><h4>Abonos registrados</h4><table class="payments-table"><thead><tr><th>#</th><th>Fecha</th><th>Forma de pago</th><th>Cuenta</th><th>Valor</th></tr></thead><tbody>${payRows}</tbody></table></div><div class="receipt-total"><h4>Resumen de la cuenta</h4><div><span>Subtotal</span><strong>${money(s.subtotal)}</strong></div><div><span>Transporte</span><strong>${money(s.shipping)}</strong></div><div><span>Descuento</span><strong>-${money(s.discount)}</strong></div><div class="grand"><span>TOTAL</span><strong>${money(s.total)}</strong></div><div><span>Abonado</span><strong>${money(s.deposit)}</strong></div><div class="balance"><span>SALDO PENDIENTE</span><strong>${money(s.balance)}</strong></div></div></div><div class="observations-box"><h4>Observaciones</h4><div>${s.notes?esc(s.notes):'&nbsp;'}</div></div><div class="receipt-footer"><strong>${esc(b.footer||'Gracias por su compra.')}</strong><span>Documento interno de venta.<br>No constituye factura electrónica.</span></div></div>`;$('#paymentFromReceipt').classList.toggle('hidden',!(s.balance>0&&s.orderStatus!=='Cancelada'));$('#modal').classList.remove('hidden');}
 $('#paymentFromReceipt').onclick=()=>currentReceiptSaleId&&registerPayment(currentReceiptSaleId);$('#statusFromReceipt').onclick=()=>currentReceiptSaleId&&setOrderStatus(currentReceiptSaleId);$('#deleteReceipt').onclick=()=>currentReceiptSaleId&&deleteSale(currentReceiptSaleId);$('#closeModal').onclick=$('#closeModal2').onclick=()=>{$('#modal').classList.add('hidden');currentReceiptSaleId=null;};
 
 // ===== PDF / compartir comprobante · V1.4.8 =====
@@ -277,7 +300,7 @@ function pdfDataUrlToBytes(dataUrl){const b64=String(dataUrl||'').split(',')[1]|
 function pdfLoadImage(src){return new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=src;});}
 async function pdfLogoData(){
   try{
-    const url=new URL('assets/logo-flor-morado.jpg',window.location.href).href;
+    const url=new URL('assets/logo-flor-morado.png',window.location.href).href;
     const [resp,img]=await Promise.all([fetch(url),pdfLoadImage(url)]);
     const bytes=new Uint8Array(await resp.arrayBuffer());
     return {bytes,width:img.naturalWidth||300,height:img.naturalHeight||300};
@@ -287,7 +310,7 @@ async function pdfLogoData(){
   }
 }
 async function buildReceiptPdfBlobFallback(s){
-  // Flor Morado v1.5.8 · plantilla vectorial con espaciado corregido.
+  // Flor Morado v1.5.10 · tipografía ampliada, paginación optimizada y encabezado corregido.
   // Este es el único PDF usado por descarga y por Compartir/WhatsApp.
   const PAGE_W=595.28,PAGE_H=841.89,M=22,TOP=820,BOTTOM=28;
   const C={
@@ -316,11 +339,17 @@ async function buildReceiptPdfBlobFallback(s){
     const cx=126;
     let cy=TOP-13;
     const contacts=[b.address,b.city,b.phone,b.email,b.social].filter(Boolean);
-    for(const v of contacts){ for(const l of wrap(v,38)){txt(cx,cy,l,7.8,false,C.text);cy-=10;} }
+    for(const v of contacts){ for(const l of wrap(v,38)){txt(cx,cy,l,8.8,false,C.text);cy-=11;} }
     const bx=350,bw=PAGE_W-M-bx,bh=78;
     rect(bx,TOP-bh,bw,bh,{fill:C.soft,stroke:C.line});
-    txt(bx+14,TOP-18,continued?'COMPROBANTE · CONTINUACIÓN':'COMPROBANTE',13,true,C.purple);
-    if(!continued){txt(bx+14,TOP-34,'DE VENTA',13,true,C.purple);txt(bx+14,TOP-49,'CUENTA DE COBRO',8.5,false,C.purple);}
+    if(continued){
+      txt(bx+14,TOP-18,'COMPROBANTE',11.5,true,C.purple);
+      txt(bx+14,TOP-34,'CONTINUACIÓN',10.5,true,C.purple);
+    }else{
+      txt(bx+14,TOP-18,'COMPROBANTE',13,true,C.purple);
+      txt(bx+14,TOP-34,'DE VENTA',13,true,C.purple);
+      txt(bx+14,TOP-49,'CUENTA DE COBRO',8.8,false,C.purple);
+    }
     rect(bx+bw-86,TOP-48,74,34,{fill:C.purple,stroke:C.purple});
     txt(bx+bw-78,TOP-27,'Comprobante',7,false,C.white);
     txt(bx+bw-78,TOP-42,s.number||'',13,true,C.white);
@@ -334,24 +363,24 @@ async function buildReceiptPdfBlobFallback(s){
   // Cliente y estado, en dos tarjetas como el diseño aprobado.
   const infoH=72,leftW=360,gap=10,rightX=M+leftW+gap,rightW=PAGE_W-M-rightX;
   rect(M,y-infoH,leftW,infoH,{fill:C.white,stroke:C.line});
-  txt(M+12,y-17,'Datos del cliente',11,true,C.purple);
-  txt(M+12,y-35,'Nombre:',8,true); txt(M+84,y-35,c?.name||'',8.5);
-  txt(M+12,y-49,'Teléfono:',8,true); txt(M+84,y-49,c?.phone||'',8.5);
-  txt(M+12,y-63,'Dirección:',8,true); txt(M+84,y-63,c?.address||'',8.5);
+  txt(M+12,y-17,'Datos del cliente',12,true,C.purple);
+  txt(M+12,y-35,'Nombre:',9,true); txt(M+84,y-35,c?.name||'',9.5);
+  txt(M+12,y-49,'Teléfono:',9,true); txt(M+84,y-49,c?.phone||'',9.5);
+  txt(M+12,y-63,'Dirección:',9,true); txt(M+84,y-63,c?.address||'',9.5);
   rect(rightX,y-infoH,rightW,infoH,{fill:C.soft,stroke:C.line});
-  txt(rightX+12,y-17,'Estado del pedido',10,true,C.purple);
+  txt(rightX+12,y-17,'Estado del pedido',11,true,C.purple);
   rect(rightX+12,y-57,rightW-24,28,{fill:C.soft2,stroke:null});
-  txt(rightX+25,y-47,s.orderStatus||'Pendiente',10,true,C.purple);
+  txt(rightX+25,y-47,s.orderStatus||'Pendiente',11,true,C.purple);
   y-=infoH+16;
 
   const tableHeader=()=>{
-    txt(M,y,'Productos',12,true,C.purple); y-=8;
+    txt(M,y,'Productos',13,true,C.purple); y-=8;
     rect(M,y-23,PAGE_W-2*M,23,{fill:C.purple2,stroke:C.purple2});
-    txt(M+8,y-15,'#',8,true,C.white);
-    txt(M+31,y-15,'Producto / descripción',8,true,C.white);
-    txt(360,y-15,'Cant.',8,true,C.white);
-    txt(407,y-15,'Precio unitario',8,true,C.white);
-    txt(503,y-15,'Total',8,true,C.white);
+    txt(M+8,y-15,'#',8.8,true,C.white);
+    txt(M+31,y-15,'Producto / descripción',8.8,true,C.white);
+    txt(360,y-15,'Cant.',8.8,true,C.white);
+    txt(407,y-15,'Precio unitario',8.8,true,C.white);
+    txt(503,y-15,'Total',8.8,true,C.white);
     y-=23;
   };
   tableHeader();
@@ -369,20 +398,20 @@ async function buildReceiptPdfBlobFallback(s){
     const details1=[ref?'Ref. '+ref:'',measure?'Medida / variante: '+measure:''].filter(Boolean).join('   |   ');
     const details2=[color?'Acabado: '+color:'',material?'Material: '+material:''].filter(Boolean).join('   |   ');
     const extra=[details,custom?'Personalización: '+custom:''].filter(Boolean).join(' · ');
-    const descLines=[...wrap(details1,52),...wrap(details2,52),...(extra?wrap(extra,52):[])].filter(Boolean);
-    const rowH=Math.max(43,25+descLines.length*9);
-    if(y-rowH<BOTTOM+150){pushPage();header(true);tableHeader();}
+    const descLines=[...wrap(details1,48),...wrap(details2,48),...(extra?wrap(extra,48):[])].filter(Boolean);
+    const rowH=Math.max(50,29+descLines.length*10);
+    if(y-rowH<BOTTOM+8){pushPage();header(true);tableHeader();}
     const bottom=y-rowH;
     if(rowIndex%2)rect(M,bottom,PAGE_W-2*M,rowH,{fill:C.alt,stroke:null});
     line(M,bottom,PAGE_W-M,bottom,.35,C.line);
     line(M+26,bottom,M+26,y,.3,C.line); line(350,bottom,350,y,.3,C.line);
     line(397,bottom,397,y,.3,C.line); line(490,bottom,490,y,.3,C.line);
-    txt(M+10,y-24,String(rowIndex+1),8.5,false,C.text);
-    txt(M+36,y-16,name,9.5,true,C.text);
-    let dy=y-29; for(const l of descLines){txt(M+36,dy,l,7.2,false,C.muted);dy-=9;}
-    txt(367,y-24,String(it.qty||0),8.5,true,C.text);
-    txt(407,y-24,moneyPdf(it.price),8.2,false,C.text);
-    txt(500,y-24,moneyPdf(Number(it.qty||0)*Number(it.price||0)),8.5,true,C.text);
+    txt(M+10,y-27,String(rowIndex+1),9.3,false,C.text);
+    txt(M+36,y-18,name,10.7,true,C.text);
+    let dy=y-32; for(const l of descLines){txt(M+36,dy,l,8.3,false,C.muted);dy-=10;}
+    txt(367,y-27,String(it.qty||0),9.3,true,C.text);
+    txt(407,y-27,moneyPdf(it.price),9,false,C.text);
+    txt(500,y-27,moneyPdf(Number(it.qty||0)*Number(it.price||0)),9.2,true,C.text);
     y=bottom; rowIndex++;
   }
   y-=14;
@@ -394,12 +423,12 @@ async function buildReceiptPdfBlobFallback(s){
   const summaryH=148,blockH=Math.max(payH,summaryH);
   ensure(blockH+82);
   rect(leftX,y-blockH,leftBoxW,blockH,{fill:C.white,stroke:C.line});
-  txt(leftX+12,y-17,'Abonos registrados',10.5,true,C.purple);
+  txt(leftX+12,y-17,'Abonos registrados',11.5,true,C.purple);
   rect(leftX,y-42,leftBoxW,20,{fill:C.soft2,stroke:null});
   txt(leftX+10,y-35,'Fecha',7,true,C.purple);txt(leftX+84,y-35,'Forma de pago',7,true,C.purple);
   txt(leftX+178,y-35,'Cuenta',7,true,C.purple);txt(leftX+260,y-35,'Valor',7,true,C.purple);
   let py=y-59;
-  if(!pays.length)txt(leftX+12,py,'Sin abonos registrados.',8,false,C.muted);
+  if(!pays.length)txt(leftX+12,py,'Sin abonos registrados.',9,false,C.muted);
   else for(const p of pays){
     const account=p.accountName||p.account||p.method||'';
     txt(leftX+10,py,p.date||'',7.2); txt(leftX+84,py,p.method||'',7.2);
@@ -408,7 +437,7 @@ async function buildReceiptPdfBlobFallback(s){
   }
 
   rect(rightBoxX,y-summaryH,rightBoxW,summaryH,{fill:C.white,stroke:C.line});
-  txt(rightBoxX+12,y-17,'Resumen de la cuenta',10.5,true,C.purple);
+  txt(rightBoxX+12,y-17,'Resumen de la cuenta',11.5,true,C.purple);
   let sy=y-38;
   const sumLine=(lab,val,bold=false)=>{txt(rightBoxX+12,sy,lab,8,bold);txt(rightBoxX+112,sy,val,8,bold);sy-=18;};
   sumLine('Subtotal',moneyPdf(s.subtotal));
@@ -435,13 +464,13 @@ async function buildReceiptPdfBlobFallback(s){
   const obsH=Math.max(44,28+noteLines.length*10);
   ensure(obsH+45);
   rect(M,y-obsH,PAGE_W-2*M,obsH,{fill:C.soft,stroke:C.line});
-  txt(M+12,y-17,'Observaciones',10,true,C.purple);
-  let ny=y-32;for(const l of noteLines){txt(M+12,ny,l,7.5,false,C.text);ny-=10;}
+  txt(M+12,y-17,'Observaciones',11.5,true,C.purple);
+  let ny=y-32;for(const l of noteLines){txt(M+12,ny,l,8.8,false,C.text);ny-=11;}
   y-=obsH+13;
-  txt(M,y,'Gracias por su compra.',10,true,C.purple);
+  txt(M,y,'Gracias por su compra.',11,true,C.purple);
   txt(PAGE_W-M-205,y,'Documento interno de venta.',7,false,C.muted);
   txt(PAGE_W-M-205,y-10,'No constituye factura electrónica.',7,false,C.muted);
-  txt(PAGE_W-M-205,y-20,'Formato PDF v1.5.8',6,false,C.muted);
+  txt(PAGE_W-M-205,y-20,'Formato PDF v1.5.10',6,false,C.muted);
 
   if(ops.length)pages.push(ops.join(''));
 
@@ -462,7 +491,7 @@ async function buildReceiptPdfBlobFallback(s){
   }
   objects[catalogId-1]=[pdfAscii(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`)];
   objects[pagesId-1]=[pdfAscii(`<< /Type /Pages /Count ${pageIds.length} /Kids [${pageIds.map(x=>x+' 0 R').join(' ')}] >>`)];
-  const chunks=[pdfAscii('%PDF-1.4\n%FM-1.5.8\n')],offsets=[0];let offset=chunks[0].length;
+  const chunks=[pdfAscii('%PDF-1.4\n%FM-1.5.10\n')],offsets=[0];let offset=chunks[0].length;
   for(let i=0;i<objects.length;i++){offsets.push(offset);const a=pdfAscii(`${i+1} 0 obj\n`),z=pdfAscii('\nendobj\n');chunks.push(a,...objects[i],z);offset+=a.length+objects[i].reduce((n,p)=>n+p.length,0)+z.length;}
   const xrefOffset=offset;let xref=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;
   for(let i=1;i<offsets.length;i++)xref+=String(offsets[i]).padStart(10,'0')+' 00000 n \n';
@@ -726,7 +755,7 @@ function backupStamp(){
  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
 }
 function backupFileName(){return `FlorMorado_Backup_${backupStamp()}.json`;}
-function backupPayload(){return JSON.stringify({...db,_backup:{app:'Flor Morado Muebles',version:'1.5.4',createdAt:new Date().toISOString()}},null,2);}
+function backupPayload(){return JSON.stringify({...db,_backup:{app:'Flor Morado Muebles',version:'1.5.10',createdAt:new Date().toISOString()}},null,2);}
 function updateBackupUi(){
  const el=$('#lastBackupText'),warn=$('#backupWarning'); if(!el||!warn)return;
  const raw=db.settings.lastBackupAt;
@@ -762,7 +791,7 @@ function restoreBackupFile(f){
    db.finance=x.finance&&typeof x.finance==='object'?x.finance:{accounts:[],transactions:[],recurring:[]};
    db.finance.accounts=Array.isArray(db.finance.accounts)?db.finance.accounts:[];db.finance.transactions=Array.isArray(db.finance.transactions)?db.finance.transactions:[];db.finance.recurring=Array.isArray(db.finance.recurring)?db.finance.recurring:[];
    for(const a of db.finance.accounts){if(FIN_LIABILITY_TYPES.includes(a.type)&&Number(a.opening||0)<0)a.opening=Math.abs(Number(a.opening||0));}
-   for(const p of db.products)if(p.minStock===undefined)p.minStock=1;
+   for(const p of db.products){delete p.stock;delete p.minStock;}for(const s of db.sales||[]){delete s.stockRestoredOnCancel;}
    for(const s of db.sales){if(!s.orderStatus)s.orderStatus='Pendiente';if(s.shippingExpense===undefined)s.shippingExpense=0;if(s.otherExpenses===undefined)s.otherExpenses=0;if(!Array.isArray(s.payments))s.payments=[];}
    localStorage.setItem(KEY,JSON.stringify(db));renderAll();updateBackupUi();alert('Backup restaurado correctamente.');
  }catch{alert('Archivo de backup no válido. No se modificó ningún dato.');}finally{$('#importFile').value='';}};
@@ -774,7 +803,7 @@ $('#restoreBackup').onclick=()=>$('#importFile').click();
 $('#importFile').onchange=e=>{const f=e.target.files[0];if(f)restoreBackupFile(f);};
 
 $('#saleDate').value=today();$('#cashDate').value=today();renderAll();updateBackupUi();addSaleItem();calcSale();refreshFinanceSyncUi(); if(financeSyncReady())syncFinanceInbox({silent:true});
-if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=1.5.4',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
+if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js?v=1.5.10',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
 
 // Revisa el buzón al volver a primer plano, sin interrumpir al usuario.
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&financeSyncReady())syncFinanceInbox({silent:true});});
