@@ -302,11 +302,6 @@ button.secondary,.ghost {
   background:#e7f7ed;
   color:var(--ok)
 }
-.badge.stock {
-  background:#fff0ed;
-  color:#a63020;
-  margin-left:7px
-}
 .badge.order.pending {
   background:#f1edf6;
   color:#665b72
@@ -326,9 +321,6 @@ button.secondary,.ghost {
 .badge.order.cancelled {
   background:#fbe9e7;
   color:#9f261b
-}
-.low-stock-row {
-  background:#fffaf9
 }
 .modal {
   position:fixed;
